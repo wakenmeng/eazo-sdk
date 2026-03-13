@@ -60,22 +60,3 @@ jobs:
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.get_version.outputs.version }}
-          body: |
-            ## @eazo/node-sdk v${{ steps.get_version.outputs.version }}
-            
-            ### Installation
-            ```bash
-            npm install @eazo/node-sdk@${{ steps.get_version.outputs.version }}
-            ```
-            
-            See [CHANGELOG](./CHANGELOG.md) for details.
-          draft: false
-          prerelease: false
