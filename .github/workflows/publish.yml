@@ -1,0 +1,81 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - '*'
+      - 'v*'
+      - 'V*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Tag name: $TAG_NAME"
+          
+          # Remove v or V prefix if exists
+          VERSION=${TAG_NAME#v}
+          VERSION=${VERSION#V}
+          
+          echo "Extracted version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: |
+          cd nodejs
+          npm ci
+
+      - name: Run tests
+        run: |
+          cd nodejs
+          npm test
+
+      - name: Build
+        run: |
+          cd nodejs
+          npm run build
+
+      - name: Update package version
+        run: |
+          cd nodejs
+          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+
+      - name: Publish to NPM
+        run: |
+          cd nodejs
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.get_version.outputs.version }}
+          body: |
+            ## @eazo/node-sdk v${{ steps.get_version.outputs.version }}
+            
+            ### Installation
+            ```bash
+            npm install @eazo/node-sdk@${{ steps.get_version.outputs.version }}
+            ```
+            
+            See [CHANGELOG](./CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
