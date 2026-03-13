@@ -39,15 +39,15 @@ jobs:
           cd nodejs
           npm ci
 
-      - name: Run tests
-        run: |
-          cd nodejs
-          npm test
-
       - name: Build
         run: |
           cd nodejs
           npm run build
+
+      - name: Run tests
+        run: |
+          cd nodejs
+          npm test
 
       - name: Update package version
         run: |
