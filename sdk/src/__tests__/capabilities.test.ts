@@ -1,0 +1,167 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { auth } from "../internal/capabilities/auth";
+import { device } from "../internal/capabilities/device";
+import { CHANNEL, VERSION } from "../internal/bridge/protocol";
+import { __resetSDK, __dispatchHostMessage } from "../testing";
+
+interface RNGlobal {
+  ReactNativeWebView?: { postMessage: (payload: string) => void };
+}
+
+function installRN(onSend: (payload: string) => void): void {
+  (globalThis.window as unknown as RNGlobal).ReactNativeWebView = { postMessage: onSend };
+}
+
+function removeRN(): void {
+  delete (globalThis.window as unknown as RNGlobal).ReactNativeWebView;
+}
+
+describe("auth capability — web fallback", () => {
+  beforeEach(() => {
+    __resetSDK();
+    removeRN();
+    auth.configure({ publicKey: "test-key" });
+  });
+
+  afterEach(() => {
+    __resetSDK();
+  });
+
+  it("returns null user when no session in localStorage", async () => {
+    await new Promise((r) => setTimeout(r, 0));
+    // Access triggers bootstrap
+    expect(auth.user).toBeNull();
+    // allow hello timeout + web fallback to resolve
+    await new Promise((r) => setTimeout(r, 1600));
+    expect(auth.user).toBeNull();
+    expect(auth.loading).toBe(false);
+  });
+});
+
+describe("auth capability — mobile host", () => {
+  beforeEach(() => {
+    __resetSDK();
+    installRN(() => undefined);
+    auth.configure({ publicKey: "test-key" });
+  });
+
+  afterEach(() => {
+    __resetSDK();
+    removeRN();
+  });
+
+  it("populates user from hello.session", async () => {
+    // Trigger bootstrap via getter
+    void auth.user;
+    // Give the bridge a tick to attach
+    await new Promise((r) => setTimeout(r, 10));
+    __dispatchHostMessage({
+      ch: CHANNEL,
+      v: VERSION,
+      t: "hello",
+      session: {
+        authenticated: true,
+        user: { id: "u1", email: "a@b.c", name: "Alice", avatarUrl: null },
+        token: "token-abc",
+      },
+      device: {
+        platform: "mobile",
+        locale: "zh-CN",
+        safeArea: { top: 44, bottom: 34 },
+        backendUrl: "https://api.test",
+      },
+      capabilities: ["auth.*", "device.getContext"],
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(auth.user).toEqual({
+      id: "u1",
+      email: "a@b.c",
+      name: "Alice",
+      avatarUrl: null,
+    });
+    expect(auth.loading).toBe(false);
+    expect(auth.authenticated).toBe(true);
+  });
+
+  it("updates on auth.changed event", async () => {
+    void auth.user;
+    await new Promise((r) => setTimeout(r, 10));
+    __dispatchHostMessage({
+      ch: CHANNEL,
+      v: VERSION,
+      t: "hello",
+      session: {
+        authenticated: true,
+        user: { id: "u1", email: null, name: "Alice", avatarUrl: null },
+        token: "t1",
+      },
+      device: {
+        platform: "mobile",
+        locale: "en-US",
+        safeArea: { top: 0, bottom: 0 },
+        backendUrl: "",
+      },
+      capabilities: ["auth.*"],
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const seen = vi.fn();
+    auth.onChange(seen);
+
+    __dispatchHostMessage({
+      ch: CHANNEL,
+      v: VERSION,
+      t: "evt",
+      name: "auth.changed",
+      data: { authenticated: false, user: null, token: null },
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(auth.user).toBeNull();
+    expect(auth.authenticated).toBe(false);
+    expect(seen).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("device capability", () => {
+  beforeEach(() => {
+    __resetSDK();
+  });
+
+  afterEach(() => {
+    __resetSDK();
+    removeRN();
+  });
+
+  it("returns web defaults without a host", async () => {
+    removeRN();
+    void device.platform;
+    await new Promise((r) => setTimeout(r, 1600));
+    expect(device.platform).toBe("web");
+    expect(typeof device.locale).toBe("string");
+  });
+
+  it("picks up device info from hello", async () => {
+    installRN(() => undefined);
+    void device.platform;
+    await new Promise((r) => setTimeout(r, 10));
+    __dispatchHostMessage({
+      ch: CHANNEL,
+      v: VERSION,
+      t: "hello",
+      session: { authenticated: false, user: null, token: null },
+      device: {
+        platform: "mobile",
+        locale: "ja-JP",
+        safeArea: { top: 50, bottom: 30 },
+        backendUrl: "https://backend.example",
+      },
+      capabilities: [],
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(device.platform).toBe("mobile");
+    expect(device.locale).toBe("ja-JP");
+    expect(device.safeArea).toEqual({ top: 50, bottom: 30 });
+    expect(device.backendUrl).toBe("https://backend.example");
+  });
+});

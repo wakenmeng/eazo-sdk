@@ -1,0 +1,66 @@
+{
+  "name": "@eazo/sdk",
+  "version": "0.1.0",
+  "description": "Eazo platform SDK — capability-first API for web apps that run on Eazo Mobile and the web browser",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "PROTOCOL.md"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/fix-use-client.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "eazo",
+    "sdk",
+    "capability",
+    "platform",
+    "host-bridge"
+  ],
+  "author": "Eazo",
+  "license": "MIT",
+  "dependencies": {
+    "@eazo/auth": "^0.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "happy-dom": "^15.11.7",
+    "react": "^19.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
