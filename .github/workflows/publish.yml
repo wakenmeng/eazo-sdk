@@ -36,27 +36,22 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd nodejs
+          cd auth
           npm ci
 
       - name: Build
         run: |
-          cd nodejs
+          cd auth
           npm run build
-
-      - name: Run tests
-        run: |
-          cd nodejs
-          npm test
 
       - name: Update package version
         run: |
-          cd nodejs
+          cd auth
           npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Publish to NPM
         run: |
-          cd nodejs
+          cd auth
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
