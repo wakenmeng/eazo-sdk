@@ -9,6 +9,7 @@ import {
   BridgeErrorObject,
 } from "../bridge/protocol";
 import { getBridge, waitForBootstrap } from "../bootstrap";
+import { __resetConfig, getPublicKey, setPublicKey } from "../config";
 import { setAuth, setLoginUI, store } from "../store";
 
 const SESSION_STORAGE_KEY = "eazo.session";
@@ -25,9 +26,7 @@ const listeners = new Set<AuthListener>();
 
 function getAuthClient(): EazoAuthClient {
   if (authClient) return authClient;
-  const publicKey =
-    authConfig.publicKey ??
-    (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_EAZO_PUBLIC_KEY : undefined);
+  const publicKey = getPublicKey();
   if (!publicKey) {
     throw new Error(
       "@eazo/sdk: missing public key. Set NEXT_PUBLIC_EAZO_PUBLIC_KEY or call auth.configure({ publicKey }).",
@@ -183,6 +182,7 @@ export function __resetAuthCapability(): void {
   listeners.clear();
   authClient = null;
   authConfig = {};
+  __resetConfig();
   if (pendingLogin) {
     pendingLogin.reject(new Error("SDK reset"));
     pendingLogin = null;
@@ -266,6 +266,7 @@ export const auth = {
   /** Set configuration (public key, overriding the NEXT_PUBLIC_EAZO_PUBLIC_KEY default). */
   configure(config: AuthConfig): void {
     authConfig = { ...authConfig, ...config };
+    if (config.publicKey !== undefined) setPublicKey(config.publicKey ?? null);
     authClient = null;
   },
 

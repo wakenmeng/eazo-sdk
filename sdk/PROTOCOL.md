@@ -22,7 +22,7 @@ type Envelope =
   | Response        // host → app  (in response to Request)
   | Event;          // host → app  (unsolicited)
 
-interface Ready      { ch: "eazo-sdk"; v: 1; t: "ready"; }
+interface Ready      { ch: "eazo-sdk"; v: 1; t: "ready"; publicKey?: string; }
 
 interface Hello {
   ch: "eazo-sdk"; v: 1; t: "hello";
@@ -46,10 +46,12 @@ interface BridgeError {
 
 ## Handshake
 
-1. App mounts → sends `{ t: "ready" }`
+1. App mounts → sends `{ t: "ready", publicKey? }`
 2. Host responds with `{ t: "hello", session, device, capabilities }`
 3. App caches the hello payload as initial state; subsequent RPCs and events apply to this cache
 4. If the app does not receive `hello` within **1.5 s**, it enters pure-web mode (no further requests are sent)
+
+The `publicKey` field on `ready` is the app's developer ECC public key (same value the app uses to exchange JWTs for encrypted sessions on the web path). Hosts that need to encrypt a session token on the app's behalf can use this directly, avoiding a backend `appId → creator → key` lookup. Absent when the app hasn't been configured with a public key — hosts should fall back to another identifier (e.g. appId) if they support one.
 
 ## RPC
 

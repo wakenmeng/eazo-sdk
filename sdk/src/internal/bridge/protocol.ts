@@ -29,7 +29,15 @@ interface EnvelopeBase<T extends string> {
   t: T;
 }
 
-export interface ReadyEnvelope extends EnvelopeBase<"ready"> {}
+export interface ReadyEnvelope extends EnvelopeBase<"ready"> {
+  /**
+   * Developer ECC public key used by the app's server to decrypt session
+   * tokens. The host uses this to request an app-specific encrypted session
+   * without having to look up the app's creator key on the backend.
+   * Optional — hosts can fall back to app-id-based lookup if absent.
+   */
+  publicKey?: string;
+}
 
 export interface HelloEnvelope extends EnvelopeBase<"hello"> {
   session: {

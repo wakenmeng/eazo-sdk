@@ -1,6 +1,7 @@
 import { BridgeClient } from "./bridge/client";
 import { HELLO_TIMEOUT_MS, type HelloEnvelope } from "./bridge/protocol";
 import { Transport } from "./bridge/transport";
+import { getPublicKey } from "./config";
 import { isBrowser } from "./env";
 
 let bridge: BridgeClient | null = null;
@@ -11,7 +12,7 @@ function ensureBridge(): BridgeClient | null {
   if (!isBrowser()) return null;
   if (bridge) return bridge;
   bridge = new BridgeClient(new Transport());
-  bridge.start();
+  bridge.start({ publicKey: getPublicKey() });
   bridge.onHello((hello) => {
     helloResolved = hello;
   });
