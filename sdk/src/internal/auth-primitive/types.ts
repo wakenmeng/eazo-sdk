@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Shared types for @eazo/auth
+// Shared types for the auth primitive layer (internal; do not import from app code)
 // ---------------------------------------------------------------------------
 
 export interface UserInfo {
@@ -56,3 +56,12 @@ export interface EazoAuthServerConfig {
   /** EAZO_PRIVATE_KEY — required for session decryption */
   privateKey: string;
 }
+
+/** Encrypted session token returned by the server — same shape as Eazo Mobile session. */
+export type SessionToken = {
+  encryptedData: string;
+  encryptedKey: string;
+  iv: string;
+  authTag: string;
+  [key: string]: string;
+};

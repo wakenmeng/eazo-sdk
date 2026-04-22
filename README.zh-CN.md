@@ -1,87 +1,63 @@
 # Eazo SDK
 
-Eazo 平台加密/解密功能的官方 SDK。
+Eazo 平台应用的官方 SDK。
 
 [English](./README.md) | 中文
 
-## 可用的 SDK
+## 包
 
-### Node.js / TypeScript
+**`@eazo/sdk`** — [`sdk/`](./sdk/) — 面向 Eazo 应用的 capability-first SDK。一份代码无缝运行在浏览器和 Eazo Mobile WebView 中。
 
-**包名:** `@eazo/node-sdk`  
-**位置:** [`nodejs/`](./nodejs/)  
-**文档:** [README](./nodejs/README.md) | [中文文档](./nodejs/README.zh-CN.md)
+- `auth` — 统一登录流程（浏览器内走 SDK 自带 UI，Eazo Mobile 下委托给宿主原生登录）、会话管理、用户资料、token 获取
+- `device` — 运行时上下文（platform / locale / safe area / backend URL）
+- `useEazo(selector)` — 基于 `useSyncExternalStore` 的 React 集成
+- `requireAuth` — 服务端 Next.js API route 的解密与鉴权守卫
+- 内置 ECC secp256k1 + AES-256-GCM 混合加密用于 session token
 
-使用 ECC secp256k1 + AES-256-GCM 混合加密解密数据。
+**安装：**
 
-**安装:**
 ```bash
-npm install @eazo/node-sdk
+npm install @eazo/sdk
 ```
 
-**快速示例:**
-```typescript
-import { decrypt } from '@eazo/node-sdk';
+**快速示例：**
 
-const result = decrypt({
-  encryptedData: "...",
-  encryptedKey: "...",
-  iv: "...",
-  authTag: "...",
-  privateKey: process.env.EAZO_PRIVATE_KEY
-});
+```tsx
+// app/layout.tsx
+import { EazoProvider } from "@eazo/sdk/react";
 
-console.log(result.data);
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <EazoProvider>{children}</EazoProvider>;
+}
 ```
 
-## 支持的语言
+```tsx
+// 任意组件
+import { auth } from "@eazo/sdk";
+import { useEazo } from "@eazo/sdk/react";
 
-- ✅ **Node.js / TypeScript** - 已完成
-- 🚧 **Python** - 即将推出
-- 🚧 **Go** - 即将推出
-- 🚧 **Java** - 即将推出
-- 🚧 **PHP** - 即将推出
+function Header() {
+  const user = useEazo((s) => s.auth.user);
+  if (!user) return <button onClick={() => auth.login()}>登录</button>;
+  return <span>你好，{user.name}</span>;
+}
+```
 
-## 文档
+完整 API 见 [`sdk/README.md`](./sdk/README.md)，Host-App 通信协议见 [`sdk/PROTOCOL.md`](./sdk/PROTOCOL.md)。
 
-有关加密方案和 API 使用的详细信息，请参考：
-- [Node.js SDK 文档（英文）](./nodejs/README.md)
-- [Node.js SDK 中文文档](./nodejs/README.zh-CN.md)
+## 安全
 
-## 安全性
+SDK 使用以下混合加密方案处理 session token：
 
-所有 SDK 都实现了相同的安全混合加密方案：
-- **ECC secp256k1** 用于密钥加密
-- **AES-256-GCM** 用于数据加密
-- **ECDH** 用于共享密钥计算
-- **SHA-256** 用于密钥派生
-
-## 贡献
-
-欢迎贡献！提交 Pull Request 前请阅读我们的贡献指南。
+- **ECC secp256k1** — 密钥封装
+- **AES-256-GCM** — 数据加密
+- **ECDH** — 共享密钥派生
+- **SHA-256** — 密钥推导
 
 ## 发布
 
-发布新版本：
-
-```bash
-# 创建并推送 tag（支持 0.0.1, v0.0.1 或 V0.0.1）
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-CI 会自动：
-- 运行测试
-- 构建包
-- 发布到 NPM
-- 创建 GitHub Release
-
-详细说明请查看 [PUBLISHING.md](./PUBLISHING.md)。
+通过 git tag 触发发布。详见 [PUBLISHING.md](./PUBLISHING.md)。
 
 ## 许可证
 
 MIT
-
----
-
-**最后更新:** 2024-03-13

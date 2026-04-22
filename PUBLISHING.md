@@ -1,6 +1,6 @@
 # Publishing Guide
 
-This guide explains how to publish a new version of @eazo/node-sdk to NPM.
+This guide explains how to publish a new version of @eazo/sdk to NPM.
 
 ## Prerequisites
 
@@ -61,7 +61,7 @@ All these formats work:
 If you need to publish manually:
 
 ```bash
-cd nodejs
+cd sdk
 
 # Update version in package.json
 npm version 1.0.0 --no-git-tag-version
@@ -127,8 +127,8 @@ git push origin 1.0.1
 
 After successful publishing:
 
-1. ✅ Verify on NPM: https://www.npmjs.com/package/@eazo/node-sdk
-2. ✅ Test installation: `npm install @eazo/node-sdk@latest`
+1. ✅ Verify on NPM: https://www.npmjs.com/package/@eazo/sdk
+2. ✅ Test installation: `npm install @eazo/sdk@latest`
 3. ✅ Check GitHub Release was created
 4. ✅ Update documentation if needed
 5. ✅ Announce the release (if major version)

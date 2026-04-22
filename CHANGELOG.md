@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Merged `@eazo/auth` primitives into `@eazo/sdk`. `EazoAuthClient` / `EazoAuthServer` / `decrypt` / `decryptUserInfo` are now internal implementation details of the SDK (`src/internal/auth-primitive/`). App code goes through `auth.*` and `requireAuth`.
+- Added `authing-js-sdk` and `elliptic` as direct dependencies of `@eazo/sdk` (previously transitive via `@eazo/auth`).
+
+### Removed
+- `@eazo/auth` package (source + directory). Repository now ships a single SDK package.
+- `EazoAuthClient.loginByEazoMobile()` and `EazoAuthClient.isEazoMobile()` — superseded by the SDK's own host bridge (`auth.login()` routes automatically).
+
 ## [0.1.0] - 2026-03-13
 
 ### Added

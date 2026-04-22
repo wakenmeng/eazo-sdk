@@ -1,5 +1,5 @@
-import type { SessionToken, SocialConnection } from "@eazo/auth";
-import { EazoAuthClient } from "@eazo/auth";
+import { EazoAuthClient } from "../auth-primitive";
+import type { SessionToken, SocialConnection } from "../auth-primitive";
 
 import type { User } from "../../types";
 import {

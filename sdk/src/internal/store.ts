@@ -1,4 +1,4 @@
-import type { SocialConnection } from "@eazo/auth";
+import type { SocialConnection } from "./auth-primitive";
 
 import type { AuthState, DeviceContext, EazoState } from "../types";
 

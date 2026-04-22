@@ -1,4 +1,5 @@
-import { EazoAuthServer, type SessionToken, type UserInfo } from "@eazo/auth";
+import { EazoAuthServer } from "./internal/auth-primitive";
+import type { SessionToken, UserInfo } from "./internal/auth-primitive";
 
 import type { User } from "./types";
 

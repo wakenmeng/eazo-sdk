@@ -1,87 +1,63 @@
 # Eazo SDK
 
-Official SDKs for Eazo platform encryption/decryption functionality.
+Official SDK for building apps on the Eazo platform.
 
 English | [中文](./README.zh-CN.md)
 
-## Available SDKs
+## Package
 
-### Node.js / TypeScript
+**`@eazo/sdk`** — [`sdk/`](./sdk/) — Capability-first SDK for Eazo apps. One codebase runs seamlessly in the browser and inside the Eazo Mobile WebView.
 
-**Package:** `@eazo/node-sdk`  
-**Location:** [`nodejs/`](./nodejs/)  
-**Documentation:** [README](./nodejs/README.md) | [中文文档](./nodejs/README.zh-CN.md)
+- `auth` — unified login flow (web UI in browsers; delegates to native host on Eazo Mobile), session management, user profile, token retrieval
+- `device` — runtime context (platform, locale, safe area, backend URL)
+- `useEazo(selector)` — React integration via `useSyncExternalStore`
+- `requireAuth` — server-side decrypt + guard for Next.js API routes
+- ECC secp256k1 + AES-256-GCM hybrid encryption for session tokens (built in)
 
-Decrypt data encrypted with ECC secp256k1 + AES-256-GCM hybrid encryption.
+**Install:**
 
-**Installation:**
 ```bash
-npm install @eazo/node-sdk
+npm install @eazo/sdk
 ```
 
-**Quick Example:**
-```typescript
-import { decrypt } from '@eazo/node-sdk';
+**Quick example:**
 
-const result = decrypt({
-  encryptedData: "...",
-  encryptedKey: "...",
-  iv: "...",
-  authTag: "...",
-  privateKey: process.env.EAZO_PRIVATE_KEY
-});
+```tsx
+// app/layout.tsx
+import { EazoProvider } from "@eazo/sdk/react";
 
-console.log(result.data);
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <EazoProvider>{children}</EazoProvider>;
+}
 ```
 
-## Supported Languages
+```tsx
+// Anywhere in the app
+import { auth } from "@eazo/sdk";
+import { useEazo } from "@eazo/sdk/react";
 
-- ✅ **Node.js / TypeScript** - Ready
-- 🚧 **Python** - Coming soon
-- 🚧 **Go** - Coming soon
-- 🚧 **Java** - Coming soon
-- 🚧 **PHP** - Coming soon
+function Header() {
+  const user = useEazo((s) => s.auth.user);
+  if (!user) return <button onClick={() => auth.login()}>Sign in</button>;
+  return <span>Hi, {user.name}</span>;
+}
+```
 
-## Documentation
-
-For detailed information about the encryption scheme and API usage, please refer to:
-- [Node.js SDK Documentation](./nodejs/README.md)
-- [Node.js SDK 中文文档](./nodejs/README.zh-CN.md)
+See [`sdk/README.md`](./sdk/README.md) for the full API and [`sdk/PROTOCOL.md`](./sdk/PROTOCOL.md) for the host-app wire protocol.
 
 ## Security
 
-All SDKs implement the same secure hybrid encryption scheme:
-- **ECC secp256k1** for key encryption
-- **AES-256-GCM** for data encryption
-- **ECDH** for shared secret computation
-- **SHA-256** for key derivation
+The SDK implements a hybrid encryption scheme for session tokens:
 
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
+- **ECC secp256k1** — key encapsulation
+- **AES-256-GCM** — data encryption
+- **ECDH** — shared secret
+- **SHA-256** — key derivation
 
 ## Publishing
 
-To publish a new version:
-
-```bash
-# Create and push a tag (supports 0.0.1, v0.0.1, or V0.0.1)
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The CI will automatically:
-- Run tests
-- Build the package
-- Publish to NPM
-- Create a GitHub Release
-
-See [PUBLISHING.md](./PUBLISHING.md) for detailed instructions.
+Releases are triggered by git tags. See [PUBLISHING.md](./PUBLISHING.md).
 
 ## License
 
 MIT
-
----
-
-**Last Updated:** 2024-03-13
