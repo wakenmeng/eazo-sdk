@@ -41,9 +41,17 @@ import { auth } from "@eazo/sdk";
 auth.user                                   // User | null
 auth.loading                                // boolean
 auth.authenticated                          // boolean
+auth.loginUIOpen                            // boolean (web login UI)
 await auth.getToken()                       // string | null
 auth.onChange((user) => { ... })            // () => void (unsubscribe)
 
+// One-stop login — handles every runtime and idempotent if already signed in.
+const user = await auth.login()             // User
+await auth.login({ timeoutMs: 120_000 })    // custom timeout (default: 5 min)
+auth.showLogin()                            // imperative open (no await)
+auth.hideLogin()                            // imperative close (rejects pending login())
+
+// Low-level login primitives (rarely needed; `login()` orchestrates these).
 await auth.loginWithSocial("google")
 await auth.loginWithEmailPassword(email, password)
 await auth.loginWithEmailCode(email, code)
@@ -55,6 +63,25 @@ auth.configure({ publicKey: "..." })        // set developer public key
 ```
 
 By default the SDK reads `NEXT_PUBLIC_EAZO_PUBLIC_KEY` from the environment. Call `auth.configure({ publicKey })` if you need to set it explicitly.
+
+#### `auth.login()` — unified login flow
+
+`auth.login()` is the canonical way to sign a user in. It:
+
+1. Returns the current user immediately if already authenticated (idempotent).
+2. On Eazo Mobile (host advertises `auth.requestLogin`), delegates to the native host login UI.
+3. Otherwise, shows the SDK-bundled login modal (social providers + email / code / password).
+
+```tsx
+<button onClick={async () => {
+  await auth.login();
+  doSomethingProtected();
+}}>
+  Do something
+</button>
+```
+
+It rejects with `DENIED` if the user cancels, or `TIMEOUT` after 5 minutes of inactivity (configurable via `timeoutMs`).
 
 ### `device`
 

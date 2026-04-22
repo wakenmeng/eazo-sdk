@@ -2,9 +2,14 @@ import type { SessionToken, SocialConnection } from "@eazo/auth";
 import { EazoAuthClient } from "@eazo/auth";
 
 import type { User } from "../../types";
-import { BridgeErrorObject } from "../bridge/protocol";
+import {
+  AUTH_CHANGED_EVENT,
+  AUTH_LOGIN_CANCELLED_EVENT,
+  AUTH_REQUEST_LOGIN,
+  BridgeErrorObject,
+} from "../bridge/protocol";
 import { getBridge, waitForBootstrap } from "../bootstrap";
-import { setAuth, store } from "../store";
+import { setAuth, setLoginUI, store } from "../store";
 
 const SESSION_STORAGE_KEY = "eazo.session";
 
@@ -60,17 +65,22 @@ function notifyListeners(user: User | null): void {
 }
 
 async function fetchWebUserProfile(session: SessionToken): Promise<User> {
-  const apiBase =
-    (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_EAZO_API_URL : "") ?? "";
-  const url = apiBase ? `${apiBase.replace(/\/$/, "")}/api/user/profile` : "/api/user/profile";
-  const res = await fetch(url, {
+  // Profile endpoint is always app-local (the app runs requireAuth server-side).
+  // device.backendUrl / NEXT_PUBLIC_EAZO_API_URL points at the Eazo platform, not the app,
+  // so it must not be used here.
+  const res = await fetch("/api/user/profile", {
     headers: { "x-eazo-session": JSON.stringify(session) },
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch user profile: ${res.status}`);
   }
   const payload = (await res.json()) as Record<string, unknown>;
-  return normalizeUser(payload);
+  // Accept both `{ ok: true, user: {...} }` (template convention) and a raw user object.
+  const userPayload =
+    payload && typeof payload === "object" && "user" in payload && payload.user
+      ? (payload.user as Record<string, unknown>)
+      : payload;
+  return normalizeUser(userPayload);
 }
 
 function normalizeUser(raw: Record<string, unknown>): User {
@@ -120,7 +130,7 @@ async function bootstrapFromHost(): Promise<boolean> {
   notifyListeners(hello.session.user);
 
   const bridge = getBridge();
-  bridge?.on("auth.changed", (payload) => {
+  bridge?.on(AUTH_CHANGED_EVENT, (payload) => {
     const data = payload as {
       authenticated: boolean;
       user: User | null;
@@ -132,6 +142,12 @@ async function bootstrapFromHost(): Promise<boolean> {
       loading: false,
     });
     notifyListeners(data.user);
+    if (data.authenticated && data.user && pendingLogin) {
+      resolvePendingLogin(data.user);
+    }
+  });
+  bridge?.on(AUTH_LOGIN_CANCELLED_EVENT, () => {
+    rejectPendingLogin(new BridgeErrorObject("DENIED", "user cancelled login"));
   });
   return true;
 }
@@ -152,12 +168,98 @@ export function _bootstrapAuth(): Promise<void> {
   return ensureBootstrap();
 }
 
+/**
+ * Internal: called by the login UI / bridge event handler when the user
+ * dismisses the login flow. Rejects the pending login() promise, if any.
+ */
+export function _cancelPendingLogin(reason: string): void {
+  rejectPendingLogin(new Error(reason));
+  setLoginUI({ open: false, submitting: false, error: null });
+}
+
 export function __resetAuthCapability(): void {
   bootstrapPromise = null;
   webSessionCache = null;
   listeners.clear();
   authClient = null;
   authConfig = {};
+  if (pendingLogin) {
+    pendingLogin.reject(new Error("SDK reset"));
+    pendingLogin = null;
+  }
+  if (pendingLoginTimer) {
+    clearTimeout(pendingLoginTimer);
+    pendingLoginTimer = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// login() / showLogin() / hideLogin() — hermetic, platform-routed login flow
+// ---------------------------------------------------------------------------
+
+export interface LoginOptions {
+  /** Milliseconds to wait for the user to complete the flow before rejecting. Default: 5 min. */
+  timeoutMs?: number;
+}
+
+const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+type PendingLogin = {
+  promise: Promise<User>;
+  resolve: (user: User) => void;
+  reject: (err: Error) => void;
+};
+
+let pendingLogin: PendingLogin | null = null;
+let pendingLoginTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resolvePendingLogin(user: User): void {
+  if (!pendingLogin) return;
+  pendingLogin.resolve(user);
+  pendingLogin = null;
+  if (pendingLoginTimer) {
+    clearTimeout(pendingLoginTimer);
+    pendingLoginTimer = null;
+  }
+  setLoginUI({ open: false, submitting: false, error: null, step: "providers" });
+}
+
+function rejectPendingLogin(err: Error): void {
+  if (!pendingLogin) return;
+  pendingLogin.reject(err);
+  pendingLogin = null;
+  if (pendingLoginTimer) {
+    clearTimeout(pendingLoginTimer);
+    pendingLoginTimer = null;
+  }
+}
+
+function createPendingLogin(timeoutMs: number): PendingLogin {
+  let resolveFn!: (user: User) => void;
+  let rejectFn!: (err: Error) => void;
+  const promise = new Promise<User>((resolve, reject) => {
+    resolveFn = resolve;
+    rejectFn = reject;
+  });
+  const entry: PendingLogin = { promise, resolve: resolveFn, reject: rejectFn };
+  pendingLoginTimer = setTimeout(() => {
+    rejectPendingLogin(new BridgeErrorObject("TIMEOUT", "Login timed out"));
+  }, timeoutMs);
+  return entry;
+}
+
+async function requestLoginViaBridge(): Promise<boolean> {
+  const bridge = getBridge();
+  if (!bridge || !bridge.getStatus().ready) return false;
+  try {
+    await bridge.request(AUTH_REQUEST_LOGIN);
+    return true;
+  } catch (err) {
+    if (err instanceof BridgeErrorObject && (err.code === "NOT_SUPPORTED" || err.code === "TIMEOUT")) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export const auth = {
@@ -252,6 +354,54 @@ export const auth = {
     setAuth({ user: null, loading: false, authenticated: false });
     notifyListeners(null);
   },
+
+  /**
+   * Opens the login flow if needed and resolves with the current User.
+   *
+   * - Already authenticated → resolves immediately with `auth.user`.
+   * - Host supports `auth.requestLogin` → delegates to the native host UI
+   *   and resolves when `auth.changed` reports `authenticated: true`.
+   * - Otherwise → shows the SDK's web LoginUI and resolves after a successful `loginWith*`.
+   *
+   * Rejects if the user cancels, the host returns an error, or the configured
+   * timeout elapses (default 5 minutes).
+   */
+  async login(options: LoginOptions = {}): Promise<User> {
+    await ensureBootstrap();
+    const current = store.getSnapshot().auth.user;
+    if (current) return current;
+
+    if (pendingLogin) return pendingLogin.promise;
+
+    const entry = createPendingLogin(options.timeoutMs ?? DEFAULT_LOGIN_TIMEOUT_MS);
+    pendingLogin = entry;
+
+    try {
+      const nativeStarted = await requestLoginViaBridge();
+      if (!nativeStarted) {
+        setLoginUI({ open: true, step: "providers", error: null, submitting: false });
+      }
+    } catch (err) {
+      rejectPendingLogin(err instanceof Error ? err : new Error(String(err)));
+    }
+
+    return entry.promise;
+  },
+
+  /** Imperative open of the SDK-owned login UI (web path). */
+  showLogin(): void {
+    setLoginUI({ open: true, step: "providers", error: null, submitting: false });
+  },
+
+  /** Imperative close. Rejects any pending `login()` promise with "user cancelled". */
+  hideLogin(): void {
+    _cancelPendingLogin("user closed login UI");
+  },
+
+  /** Reactive boolean: is the SDK-owned login UI currently open? */
+  get loginUIOpen(): boolean {
+    return store.getSnapshot().loginUI.open;
+  },
 };
 
 async function completeWebLogin(session: SessionToken): Promise<void> {
@@ -260,4 +410,5 @@ async function completeWebLogin(session: SessionToken): Promise<void> {
   const user = await fetchWebUserProfile(session);
   setAuth({ user, loading: false, authenticated: true });
   notifyListeners(user);
+  if (pendingLogin) resolvePendingLogin(user);
 }

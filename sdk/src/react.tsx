@@ -5,6 +5,7 @@ import * as React from "react";
 import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
+import { LoginUI } from "./internal/login-ui";
 import { store, INITIAL_STATE } from "./internal/store";
 import type { EazoState } from "./types";
 
@@ -16,6 +17,9 @@ const MountedContext = React.createContext(false);
  *   <EazoProvider>
  *     <App />
  *   </EazoProvider>
+ *
+ * Renders the shared login UI so `auth.login()` works anywhere in the app
+ * without the consumer mounting anything else.
  */
 export function EazoProvider(props: { children: React.ReactNode }): React.ReactElement {
   React.useEffect(() => {
@@ -26,7 +30,10 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
   }, []);
 
   return (
-    <MountedContext.Provider value={true}>{props.children}</MountedContext.Provider>
+    <MountedContext.Provider value={true}>
+      {props.children}
+      <LoginUI />
+    </MountedContext.Provider>
   );
 }
 

@@ -18,14 +18,48 @@ function removeRN(): void {
 }
 
 describe("auth capability — web fallback", () => {
+  let originalFetch: typeof fetch;
+
   beforeEach(() => {
     __resetSDK();
     removeRN();
     auth.configure({ publicKey: "test-key" });
+    originalFetch = globalThis.fetch;
   });
 
   afterEach(() => {
     __resetSDK();
+    globalThis.fetch = originalFetch;
+  });
+
+  it("extracts user from { ok, user: {...} } envelope returned by the app", async () => {
+    window.localStorage.setItem(
+      "eazo.session",
+      JSON.stringify({ encryptedData: "e", encryptedKey: "k", iv: "i", authTag: "a" }),
+    );
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          user: {
+            id: "u-xyz",
+            email: "e@example.com",
+            name: "Alice",
+            avatarUrl: "https://example.com/a.png",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )) as typeof fetch;
+
+    void auth.user;
+    await new Promise((r) => setTimeout(r, 1650));
+    expect(auth.user).toEqual({
+      id: "u-xyz",
+      email: "e@example.com",
+      name: "Alice",
+      avatarUrl: "https://example.com/a.png",
+    });
   });
 
   it("returns null user when no session in localStorage", async () => {

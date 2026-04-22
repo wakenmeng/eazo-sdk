@@ -91,6 +91,7 @@ The app checks this list before sending a request; unsupported methods fail imme
 |---|---|---|---|
 | `auth.getToken` | — | `{ token: string \| null }` | Current session token |
 | `auth.getSession` | — | `{ session: SessionToken \| null }` | Raw encrypted session (`x-eazo-session` payload) |
+| `auth.requestLogin` | `{ preferredProvider?: string }` (optional) | `{ started: boolean }` | Host should display its native login UI and return promptly (don't block on user). The SDK then waits for `auth.changed` (success) or `auth.loginCancelled` (dismiss). If the host can't show native UI, respond `NOT_SUPPORTED` — SDK falls back to the web login UI inside the WebView. |
 | `device.getContext` | — | `DeviceContext` | Usually unused — hello already contains this |
 
 ### Events
@@ -98,6 +99,7 @@ The app checks this list before sending a request; unsupported methods fail imme
 | `name` | `data` | Trigger |
 |---|---|---|
 | `auth.changed` | `{ authenticated, user, token }` | Login, logout, account switch |
+| `auth.loginCancelled` | — (optional `{ reason?: string }`) | User dismissed the native login UI without authenticating. Causes the app's in-flight `auth.login()` to reject with `DENIED`. |
 | `device.safeArea.changed` | `{ top?, bottom? }` | Keyboard / orientation |
 
 ## Version evolution

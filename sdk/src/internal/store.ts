@@ -1,6 +1,21 @@
+import type { SocialConnection } from "@eazo/auth";
+
 import type { AuthState, DeviceContext, EazoState } from "../types";
 
 type Listener = () => void;
+
+export type LoginUIStep = "providers" | "email";
+export type LoginUIEmailMode = "code" | "password";
+
+export interface LoginUIState {
+  open: boolean;
+  step: LoginUIStep;
+  emailMode: LoginUIEmailMode;
+  providers: SocialConnection[];
+  providersLoading: boolean;
+  error: string | null;
+  submitting: boolean;
+}
 
 const INITIAL_AUTH: AuthState = {
   user: null,
@@ -15,24 +30,34 @@ const INITIAL_DEVICE: DeviceContext = {
   backendUrl: "",
 };
 
-export const INITIAL_STATE: EazoState = {
-  auth: INITIAL_AUTH,
-  device: INITIAL_DEVICE,
+const INITIAL_LOGIN_UI: LoginUIState = {
+  open: false,
+  step: "providers",
+  emailMode: "code",
+  providers: [],
+  providersLoading: false,
+  error: null,
+  submitting: false,
 };
 
-let snapshot: EazoState = INITIAL_STATE;
+export interface InternalEazoState extends EazoState {
+  loginUI: LoginUIState;
+}
+
+export const INITIAL_STATE: InternalEazoState = {
+  auth: INITIAL_AUTH,
+  device: INITIAL_DEVICE,
+  loginUI: INITIAL_LOGIN_UI,
+};
+
+let snapshot: InternalEazoState = INITIAL_STATE;
 const listeners = new Set<Listener>();
 
-/**
- * Minimal pub-sub over an immutable snapshot. Capability modules mutate via
- * `setAuth` / `setDevice`; each setter replaces only its namespace reference
- * so that `Object.is` selector comparison works for unaffected slices.
- */
 export const store = {
-  getSnapshot(): EazoState {
+  getSnapshot(): InternalEazoState {
     return snapshot;
   },
-  getServerSnapshot(): EazoState {
+  getServerSnapshot(): InternalEazoState {
     return INITIAL_STATE;
   },
   subscribe(listener: Listener): () => void {
@@ -45,7 +70,7 @@ export const store = {
   },
 };
 
-function publish(next: EazoState): void {
+function publish(next: InternalEazoState): void {
   snapshot = next;
   for (const l of listeners) l();
 }
@@ -71,4 +96,14 @@ export function setDevice(patch: Partial<DeviceContext>): void {
   );
   if (!changed) return;
   publish({ ...snapshot, device: nextDevice });
+}
+
+export function setLoginUI(patch: Partial<LoginUIState>): void {
+  const current = snapshot.loginUI;
+  const next: LoginUIState = { ...current, ...patch };
+  const changed = (Object.keys(next) as Array<keyof LoginUIState>).some(
+    (key) => next[key] !== current[key],
+  );
+  if (!changed) return;
+  publish({ ...snapshot, loginUI: next });
 }

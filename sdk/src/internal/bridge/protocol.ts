@@ -6,6 +6,11 @@ export const VERSION = 1 as const;
 export const HELLO_TIMEOUT_MS = 1500;
 export const REQUEST_TIMEOUT_MS = 10_000;
 
+// Host-mediated method and event names used by capabilities.
+export const AUTH_REQUEST_LOGIN = "auth.requestLogin";
+export const AUTH_CHANGED_EVENT = "auth.changed";
+export const AUTH_LOGIN_CANCELLED_EVENT = "auth.loginCancelled";
+
 export type ErrorCode =
   | "NOT_SUPPORTED"
   | "TIMEOUT"

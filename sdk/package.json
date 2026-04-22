@@ -43,7 +43,8 @@
   "author": "Eazo",
   "license": "MIT",
   "dependencies": {
-    "@eazo/auth": "^0.2.0"
+    "@eazo/auth": "^0.2.0",
+    "@radix-ui/react-dialog": "^1.1.4"
   },
   "peerDependencies": {
     "react": ">=18"
