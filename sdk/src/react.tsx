@@ -7,7 +7,7 @@ import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
 import { LoginUI } from "./internal/login-ui";
 import { store, INITIAL_STATE } from "./internal/store";
-import type { EazoState } from "./types";
+import type { DeviceContext, EazoState } from "./types";
 
 const MountedContext = React.createContext(false);
 
@@ -29,12 +29,36 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
     void _bootstrapDevice();
   }, []);
 
+  useSafeAreaCssVars();
+
   return (
     <MountedContext.Provider value={true}>
       {props.children}
       <LoginUI />
     </MountedContext.Provider>
   );
+}
+
+/**
+ * Mirrors the reported device safe area onto `document.documentElement` as
+ * `--eazo-safe-area-top` / `--eazo-safe-area-bottom`. Apps reference these
+ * from CSS (`padding-top: var(--eazo-safe-area-top, 0)`) to avoid the host
+ * chrome (status bar, "Hosted by Eazo" pill, etc.) without needing to read
+ * device state themselves.
+ */
+function useSafeAreaCssVars(): void {
+  const safeArea = React.useSyncExternalStore<DeviceContext["safeArea"]>(
+    store.subscribe,
+    () => store.getSnapshot().device.safeArea,
+    () => INITIAL_STATE.device.safeArea,
+  );
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.style.setProperty("--eazo-safe-area-top", `${safeArea.top}px`);
+    root.style.setProperty("--eazo-safe-area-bottom", `${safeArea.bottom}px`);
+  }, [safeArea.top, safeArea.bottom]);
 }
 
 /**

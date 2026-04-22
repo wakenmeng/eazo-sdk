@@ -95,6 +95,18 @@ device.backendUrl                           // '' when running web-only
 device.getContext()                         // full DeviceContext
 ```
 
+`<EazoProvider>` also mirrors `device.safeArea` onto `document.documentElement` as CSS custom properties so app layouts can avoid host chrome without reading device state directly:
+
+```css
+/* On the web SDK falls back to 0; inside Eazo Mobile the host fills in the
+   effective reserved area (status bar on top, "Hosted by Eazo" chrome on
+   the bottom). */
+body {
+  padding-top: var(--eazo-safe-area-top, 0px);
+  padding-bottom: var(--eazo-safe-area-bottom, 0px);
+}
+```
+
 ### React integration
 
 ```ts
