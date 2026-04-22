@@ -10,7 +10,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,13 +19,8 @@ jobs:
         id: get_version
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
-          echo "Tag name: $TAG_NAME"
-          
-          # Remove v or V prefix if exists
           VERSION=${TAG_NAME#v}
           VERSION=${VERSION#V}
-          
-          echo "Extracted version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup Node.js
@@ -35,23 +30,18 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: |
-          cd auth
-          npm ci
+        run: cd sdk && npm ci
 
       - name: Build
-        run: |
-          cd auth
-          npm run build
+        run: cd sdk && npm run build
+
+      - name: Run tests
+        run: cd sdk && npm test
 
       - name: Update package version
-        run: |
-          cd auth
-          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
+        run: cd sdk && npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
 
-      - name: Publish to NPM
-        run: |
-          cd auth
-          npm publish --access public
+      - name: Publish @eazo/sdk
+        run: cd sdk && npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
