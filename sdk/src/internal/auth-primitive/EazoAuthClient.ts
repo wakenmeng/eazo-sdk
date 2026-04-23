@@ -1,10 +1,10 @@
 import { AuthenticationClient, EmailScene } from "authing-js-sdk";
 
+import { getApiBase } from "../config";
 import type { EazoAuthClientConfig, SessionToken, SocialConnection } from "./types";
 
 const DEFAULT_AUTH_APP_ID     = "6972f32040acf5801552404b";
 const DEFAULT_AUTH_APP_DOMAIN = "https://eazo.genauth.ai";
-const DEFAULT_API_BASE        = "https://eazo.ai";
 
 /**
  * Browser-side auth primitive. Wraps GenAuth (Authing) to exchange a JWT for
@@ -27,7 +27,7 @@ export class EazoAuthClient {
     this.publicKey     = config.publicKey;
     this.authAppId     = config.authAppId     ?? DEFAULT_AUTH_APP_ID;
     this.authAppDomain = config.authAppDomain ?? DEFAULT_AUTH_APP_DOMAIN;
-    this.apiBase       = config.apiBase       ?? DEFAULT_API_BASE;
+    this.apiBase       = getApiBase(config.apiBase);
   }
 
   /**
