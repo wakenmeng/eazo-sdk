@@ -45,13 +45,16 @@
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.4",
     "authing-js-sdk": "^4.23.55",
-    "elliptic": "^6.6.1"
+    "elliptic": "^6.6.1",
+    "openai": "^6.34.0"
   },
   "peerDependencies": {
     "react": ">=18"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@testing-library/react": "^16.1.0",
