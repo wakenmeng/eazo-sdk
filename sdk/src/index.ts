@@ -2,9 +2,11 @@ export { auth } from "./internal/capabilities/auth";
 export { device } from "./internal/capabilities/device";
 export { storage } from "./internal/capabilities/storage";
 export { ai } from "./internal/capabilities/ai";
+export { memory } from "./internal/capabilities/memory";
 
 export type { LoginOptions } from "./internal/capabilities/auth";
 export type { StorageCredentials, UploadResult } from "./internal/capabilities/storage";
+export type { MemoryActionParams } from "./internal/capabilities/memory";
 export type {
   ChatCompletion,
   ChatCompletionChunk,
