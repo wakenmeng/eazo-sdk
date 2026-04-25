@@ -95,6 +95,7 @@ The app checks this list before sending a request; unsupported methods fail imme
 | `auth.getSession` | — | `{ session: SessionToken \| null }` | Raw encrypted session (`x-eazo-session` payload) |
 | `auth.requestLogin` | `{ preferredProvider?: string }` (optional) | `{ started: boolean }` | Host should display its native login UI and return promptly (don't block on user). The SDK then waits for `auth.changed` (success) or `auth.loginCancelled` (dismiss). If the host can't show native UI, respond `NOT_SUPPORTED` — SDK falls back to the web login UI inside the WebView. |
 | `device.getContext` | — | `DeviceContext` | Usually unused — hello already contains this |
+| `share.compose` | `{ text?: string; images?: string[]; sourceAppId?: string }` | `{ accepted: boolean }` | App hands raw share materials (text + up to 4 images, each `https://...` or `data:image/...;base64,...`) to the host. Host opens its compose surface, AI-drafts a post from the inputs, and lets the user edit and publish. Respond promptly after navigation begins — the SDK times out at 10 s. If the host can't accept the share, respond `NOT_SUPPORTED`; the SDK falls back to a "Continue in the Eazo app" download CTA in the web. Reject with `DENIED` when the host requires a logged-in user and none is signed in. |
 
 ### Events
 

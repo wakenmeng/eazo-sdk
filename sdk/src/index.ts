@@ -3,6 +3,7 @@ export { device } from "./internal/capabilities/device";
 export { storage } from "./internal/capabilities/storage";
 export { ai } from "./internal/capabilities/ai";
 export { memory } from "./internal/capabilities/memory";
+export { share } from "./internal/capabilities/share";
 
 export type { LoginOptions } from "./internal/capabilities/auth";
 export type { StorageCredentials, UploadResult } from "./internal/capabilities/storage";
@@ -13,4 +14,9 @@ export type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
 } from "./internal/capabilities/ai";
+export type {
+  ShareComposeInput,
+  ShareComposeResult,
+  ShareConfig,
+} from "./internal/capabilities/share";
 export type { User, DeviceContext, AuthState, EazoState } from "./types";

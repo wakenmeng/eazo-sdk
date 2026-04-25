@@ -40,14 +40,24 @@ const INITIAL_LOGIN_UI: LoginUIState = {
   submitting: false,
 };
 
+export interface ShareUIState {
+  open: boolean;
+}
+
+const INITIAL_SHARE_UI: ShareUIState = {
+  open: false,
+};
+
 export interface InternalEazoState extends EazoState {
   loginUI: LoginUIState;
+  shareUI: ShareUIState;
 }
 
 export const INITIAL_STATE: InternalEazoState = {
   auth: INITIAL_AUTH,
   device: INITIAL_DEVICE,
   loginUI: INITIAL_LOGIN_UI,
+  shareUI: INITIAL_SHARE_UI,
 };
 
 let snapshot: InternalEazoState = INITIAL_STATE;
@@ -106,4 +116,14 @@ export function setLoginUI(patch: Partial<LoginUIState>): void {
   );
   if (!changed) return;
   publish({ ...snapshot, loginUI: next });
+}
+
+export function setShareUI(patch: Partial<ShareUIState>): void {
+  const current = snapshot.shareUI;
+  const next: ShareUIState = { ...current, ...patch };
+  const changed = (Object.keys(next) as Array<keyof ShareUIState>).some(
+    (key) => next[key] !== current[key],
+  );
+  if (!changed) return;
+  publish({ ...snapshot, shareUI: next });
 }

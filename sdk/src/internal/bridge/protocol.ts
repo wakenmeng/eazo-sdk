@@ -10,6 +10,7 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 export const AUTH_REQUEST_LOGIN = "auth.requestLogin";
 export const AUTH_CHANGED_EVENT = "auth.changed";
 export const AUTH_LOGIN_CANCELLED_EVENT = "auth.loginCancelled";
+export const SHARE_COMPOSE = "share.compose";
 
 export type ErrorCode =
   | "NOT_SUPPORTED"

@@ -6,6 +6,7 @@ import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
 import { LoginUI } from "./internal/login-ui";
+import { ShareDownloadModal } from "./internal/share-ui";
 import { store, INITIAL_STATE } from "./internal/store";
 import type { DeviceContext, EazoState } from "./types";
 
@@ -35,6 +36,7 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
     <MountedContext.Provider value={true}>
       {props.children}
       <LoginUI />
+      <ShareDownloadModal />
     </MountedContext.Provider>
   );
 }

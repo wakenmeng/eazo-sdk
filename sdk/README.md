@@ -107,6 +107,26 @@ body {
 }
 ```
 
+### `share`
+
+Hand share materials (text + images) to the platform's compose surface. Inside the Eazo Mobile WebView the host opens its native compose page, AI-drafts a post from the inputs, and lets the user edit and publish; in a plain browser the SDK shows a "Continue in the Eazo app" CTA.
+
+```ts
+import { share } from "@eazo/sdk";
+
+await share.compose({
+  text: "Made carbonara tonight — first time the egg didn't scramble.",
+  images: ["data:image/jpeg;base64,..."],   // up to 4; data: or https:
+  sourceAppId: "recipe-keeper",             // optional attribution
+});
+// → { accepted: true } in the mobile app
+// → { accepted: false } on the web (download CTA shown)
+
+share.configure({ downloadUrl: "https://eazo.app/get" });
+```
+
+`share.compose` throws `INVALID_ARGS` synchronously if neither `text` nor `images` is provided, or if more than 4 images are passed.
+
 ### React integration
 
 ```ts
