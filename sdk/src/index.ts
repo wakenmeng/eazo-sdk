@@ -17,6 +17,5 @@ export type {
 export type {
   ShareComposeInput,
   ShareComposeResult,
-  ShareConfig,
 } from "./internal/capabilities/share";
 export type { User, DeviceContext, AuthState, EazoState } from "./types";

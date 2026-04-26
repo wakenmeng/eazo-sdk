@@ -147,16 +147,3 @@ describe("share.compose — pure web path", () => {
     expect(store.getSnapshot().shareUI.open).toBe(true);
   });
 });
-
-describe("share.configure", () => {
-  beforeEach(() => {
-    __resetSDK();
-  });
-  afterEach(() => {
-    __resetSDK();
-  });
-
-  it("does not throw and persists download URL override across compose calls", () => {
-    expect(() => share.configure({ downloadUrl: "https://eazo.test/get" })).not.toThrow();
-  });
-});

@@ -3,7 +3,7 @@ import { BridgeErrorObject, SHARE_COMPOSE } from "../bridge/protocol";
 import { setShareUI } from "../store";
 
 const MAX_IMAGES = 4;
-const DEFAULT_DOWNLOAD_URL = "https://eazo.app";
+export const SHARE_DOWNLOAD_URL = "https://eazo.ai/";
 
 export interface ShareComposeInput {
   /** Free-form text the app wants to seed the post with. */
@@ -30,20 +30,8 @@ export interface ShareComposeResult {
   accepted: boolean;
 }
 
-export interface ShareConfig {
-  /** Override for the web download CTA modal. Defaults to https://eazo.app. */
-  downloadUrl?: string;
-}
-
-let config: ShareConfig = {};
-
 export function __resetShareCapability(): void {
-  config = {};
   setShareUI({ open: false });
-}
-
-export function getShareDownloadUrl(): string {
-  return config.downloadUrl?.trim() || DEFAULT_DOWNLOAD_URL;
 }
 
 function validate(input: ShareComposeInput): void {
@@ -89,11 +77,6 @@ function normalize(input: ShareComposeInput): ShareComposeInput {
 }
 
 export const share = {
-  /** Override the SDK's web download CTA target. */
-  configure(next: ShareConfig): void {
-    config = { ...config, ...next };
-  },
-
   /**
    * Hand share materials to the host's compose surface.
    *
@@ -101,8 +84,7 @@ export const share = {
    *   page, AI-drafts a post from the inputs, and lets the user edit and
    *   publish. Resolves `{ accepted: true }`.
    * - **In a plain browser** the SDK shows a "Continue in the Eazo app"
-   *   modal pointing to the configured download URL. Resolves
-   *   `{ accepted: false }`.
+   *   modal pointing to https://eazo.ai/. Resolves `{ accepted: false }`.
    *
    * Throws `BridgeError('INVALID_ARGS')` synchronously when neither `text`
    * nor `images` are provided, or when more than 4 images are passed.
