@@ -49,8 +49,32 @@ export class EazoAuthClient {
       throw new Error(`Failed to get session token: ${res.status}`);
     }
 
-    const json = await res.json() as { data: SessionToken };
-    return json.data;
+    // Eazo platform wraps responses in { code, message, data }. Treat any
+    // non-zero code as a business error and validate the data shape before
+    // handing it to verifySession — otherwise an undefined `data` would be
+    // JSON.stringify'd into the literal string "undefined" and the API
+    // route would 401 with "Malformed session".
+    const json = (await res.json()) as {
+      code?: number;
+      message?: string;
+      data?: SessionToken;
+    };
+    if (typeof json.code === "number" && json.code !== 0) {
+      throw new Error(
+        `app-session-token failed (code ${json.code}): ${json.message ?? "unknown error"}`,
+      );
+    }
+    const data = json.data;
+    if (
+      !data ||
+      !data.encryptedData ||
+      !data.encryptedKey ||
+      !data.iv ||
+      !data.authTag
+    ) {
+      throw new Error("app-session-token returned an incomplete session token");
+    }
+    return data;
   }
 
   /** Initiates a social login popup and returns an encrypted session token. */
