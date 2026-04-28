@@ -56,7 +56,7 @@ export class BridgeClient {
     this.transport = transport;
   }
 
-  start(options: { publicKey?: string | null } = {}): void {
+  start(options: { appId?: string | null } = {}): void {
     if (this.started || typeof window === "undefined") return;
     this.started = true;
     this.transport.attach();
@@ -65,9 +65,9 @@ export class BridgeClient {
       ch: typeof CHANNEL;
       v: typeof VERSION;
       t: "ready";
-      publicKey?: string;
+      appId?: string;
     } = { ch: CHANNEL, v: VERSION, t: "ready" };
-    if (options.publicKey) ready.publicKey = options.publicKey;
+    if (options.appId) ready.appId = options.appId;
     this.transport.send(ready);
     this.helloTimer = setTimeout(() => {
       this.helloTimer = null;

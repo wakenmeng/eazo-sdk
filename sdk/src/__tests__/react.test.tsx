@@ -29,7 +29,7 @@ describe("useEazo", () => {
   beforeEach(() => {
     __resetSDK();
     installRN();
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
   });
 
   afterEach(() => {

@@ -51,7 +51,7 @@ describe("auth.login — mobile host path", () => {
     __resetSDK();
     sent = [];
     installRN((payload) => sent.push(payload));
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
   });
 
   afterEach(() => {
@@ -155,7 +155,7 @@ describe("auth.login — already authenticated", () => {
   beforeEach(() => {
     __resetSDK();
     installRN(() => undefined);
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
   });
 
   afterEach(() => {
@@ -179,7 +179,7 @@ describe("auth.login — web path", () => {
   beforeEach(() => {
     __resetSDK();
     removeRN();
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
   });
 
   afterEach(() => {

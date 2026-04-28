@@ -1,9 +1,12 @@
+import { getApiBase } from "../config";
 import { waitForBootstrap, getBridge } from "../bootstrap";
 import { BridgeErrorObject, SHARE_COMPOSE } from "../bridge/protocol";
 import { setShareUI } from "../store";
 
 const MAX_IMAGES = 4;
-export const SHARE_DOWNLOAD_URL = "https://eazo.ai/";
+export function getShareDownloadUrl(): string {
+  return `${getApiBase()}/`;
+}
 
 export interface ShareComposeInput {
   /** Free-form text the app wants to seed the post with. */

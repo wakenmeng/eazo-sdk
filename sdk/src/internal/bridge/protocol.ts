@@ -32,12 +32,11 @@ interface EnvelopeBase<T extends string> {
 
 export interface ReadyEnvelope extends EnvelopeBase<"ready"> {
   /**
-   * Developer ECC public key used by the app's server to decrypt session
-   * tokens. The host uses this to request an app-specific encrypted session
-   * without having to look up the app's creator key on the backend.
-   * Optional — hosts can fall back to app-id-based lookup if absent.
+   * Eazo app ID — used by the host to request an app-specific session token
+   * without a separate backend lookup.
+   * Optional — hosts can fall back to other identifiers if absent.
    */
-  publicKey?: string;
+  appId?: string;
 }
 
 export interface HelloEnvelope extends EnvelopeBase<"hello"> {

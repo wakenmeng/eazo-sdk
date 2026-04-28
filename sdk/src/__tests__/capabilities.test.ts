@@ -23,7 +23,7 @@ describe("auth capability — web fallback", () => {
   beforeEach(() => {
     __resetSDK();
     removeRN();
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
     originalFetch = globalThis.fetch;
   });
 
@@ -77,7 +77,7 @@ describe("auth capability — mobile host", () => {
   beforeEach(() => {
     __resetSDK();
     installRN(() => undefined);
-    auth.configure({ publicKey: "test-key" });
+    auth.configure({ appId: "test-key" });
   });
 
   afterEach(() => {

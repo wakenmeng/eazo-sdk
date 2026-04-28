@@ -3,7 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as React from "react";
 
-import { SHARE_DOWNLOAD_URL } from "../capabilities/share";
+import { getShareDownloadUrl } from "../capabilities/share";
 import { setShareUI, store } from "../store";
 import { CloseIcon, ShareToPhoneIcon } from "./icons";
 import { ensureShareStylesInjected } from "./styles";
@@ -55,7 +55,7 @@ export function ShareDownloadModal(): React.ReactElement | null {
 
           <a
             className="eazo-share-cta"
-            href={SHARE_DOWNLOAD_URL}
+            href={getShareDownloadUrl()}
             target="_blank"
             rel="noreferrer noopener"
             onClick={close}

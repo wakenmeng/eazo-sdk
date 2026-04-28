@@ -9,7 +9,7 @@ import {
   BridgeErrorObject,
 } from "../bridge/protocol";
 import { getBridge, waitForBootstrap } from "../bootstrap";
-import { __resetConfig, getPublicKey, setPublicKey } from "../config";
+import { __resetConfig, getAppId, setAppId } from "../config";
 import { setAuth, setLoginUI, store } from "../store";
 
 const SESSION_STORAGE_KEY = "eazo.session";
@@ -17,7 +17,7 @@ const SESSION_STORAGE_KEY = "eazo.session";
 type AuthListener = (user: User | null) => void;
 
 interface AuthConfig {
-  publicKey?: string;
+  appId?: string;
 }
 
 let authClient: EazoAuthClient | null = null;
@@ -26,13 +26,13 @@ const listeners = new Set<AuthListener>();
 
 function getAuthClient(): EazoAuthClient {
   if (authClient) return authClient;
-  const publicKey = getPublicKey();
-  if (!publicKey) {
+  const appId = getAppId();
+  if (!appId) {
     throw new Error(
-      "@eazo/sdk: missing public key. Set NEXT_PUBLIC_EAZO_PUBLIC_KEY or call auth.configure({ publicKey }).",
+      "@eazo/sdk: missing app id. Set NEXT_PUBLIC_EAZO_APP_ID or call auth.configure({ appId }).",
     );
   }
-  authClient = new EazoAuthClient({ publicKey });
+  authClient = new EazoAuthClient({ appId });
   return authClient;
 }
 
@@ -263,10 +263,10 @@ async function requestLoginViaBridge(): Promise<boolean> {
 }
 
 export const auth = {
-  /** Set configuration (public key, overriding the NEXT_PUBLIC_EAZO_PUBLIC_KEY default). */
+  /** Set configuration (app id, overriding the NEXT_PUBLIC_EAZO_APP_ID default). */
   configure(config: AuthConfig): void {
     authConfig = { ...authConfig, ...config };
-    if (config.publicKey !== undefined) setPublicKey(config.publicKey ?? null);
+    if (config.appId !== undefined) setAppId(config.appId ?? null);
     authClient = null;
   },
 

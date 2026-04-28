@@ -42,8 +42,8 @@ export interface SocialConnection {
 }
 
 export interface EazoAuthClientConfig {
-  /** Developer ECC public key — used to exchange a GenAuth JWT for an encrypted session token. */
-  publicKey: string;
+  /** Eazo app ID (e.g. "i_xxx") — used to exchange a GenAuth JWT for a session token. */
+  appId: string;
   /** GenAuth Application ID. Defaults to the Eazo platform app. */
   authAppId?: string;
   /** GenAuth tenant domain. Defaults to https://eazo.genauth.ai */

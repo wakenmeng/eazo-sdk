@@ -1,4 +1,4 @@
-import { getApiBase, getPublicKey } from "../config";
+import { getApiBase, getAppId } from "../config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,17 +29,17 @@ export interface UploadResult {
 // ---------------------------------------------------------------------------
 
 async function fetchCredentials(path: string): Promise<StorageCredentials> {
-  const publicKey = getPublicKey();
-  if (!publicKey) {
+  const appId = getAppId();
+  if (!appId) {
     throw new Error(
-      "@eazo/sdk: missing public key. Set NEXT_PUBLIC_EAZO_PUBLIC_KEY or call auth.configure({ publicKey }).",
+      "@eazo/sdk: missing app id. Set NEXT_PUBLIC_EAZO_APP_ID or call auth.configure({ appId }).",
     );
   }
 
   const res = await fetch(`${getApiBase()}/api/open/storage-credentials`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ publicKey, path }),
+    body: JSON.stringify({ appId, path }),
   });
 
   if (!res.ok) {

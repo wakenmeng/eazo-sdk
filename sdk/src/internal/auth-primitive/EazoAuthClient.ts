@@ -15,7 +15,7 @@ const DEFAULT_AUTH_APP_DOMAIN = "https://eazo.genauth.ai";
  * rather than using EazoAuthClient directly.
  */
 export class EazoAuthClient {
-  private readonly publicKey: string;
+  private readonly appId: string;
   private readonly authAppId: string;
   private readonly authAppDomain: string;
   private readonly apiBase: string;
@@ -23,8 +23,8 @@ export class EazoAuthClient {
   private _authingClient: AuthenticationClient | null = null;
 
   constructor(config: EazoAuthClientConfig) {
-    if (!config.publicKey) throw new Error("@eazo/sdk: publicKey is required");
-    this.publicKey     = config.publicKey;
+    if (!config.appId) throw new Error("@eazo/sdk: appId is required");
+    this.appId         = config.appId;
     this.authAppId     = config.authAppId     ?? DEFAULT_AUTH_APP_ID;
     this.authAppDomain = config.authAppDomain ?? DEFAULT_AUTH_APP_DOMAIN;
     this.apiBase       = getApiBase(config.apiBase);
@@ -42,7 +42,7 @@ export class EazoAuthClient {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${jwt}`,
       },
-      body: JSON.stringify({ publicKey: this.publicKey }),
+      body: JSON.stringify({ appId: this.appId }),
     });
 
     if (!res.ok) {

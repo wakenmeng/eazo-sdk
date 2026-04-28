@@ -3,22 +3,22 @@
  * and capability modules can read/write without circular imports.
  */
 
-let publicKey: string | null = null;
+let appId: string | null = null;
 const DEFAULT_API_BASE = "https://eazo.ai";
 
-export function setPublicKey(key: string | null): void {
-  publicKey = key;
+export function setAppId(id: string | null): void {
+  appId = id;
 }
 
 /**
- * Returns the configured developer ECC public key. Falls back to
- * NEXT_PUBLIC_EAZO_PUBLIC_KEY when no explicit override has been set via
- * `auth.configure({ publicKey })`.
+ * Returns the configured Eazo app ID. Falls back to
+ * NEXT_PUBLIC_EAZO_APP_ID when no explicit override has been set via
+ * `auth.configure({ appId })`.
  */
-export function getPublicKey(): string | null {
-  if (publicKey) return publicKey;
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_EAZO_PUBLIC_KEY) {
-    return process.env.NEXT_PUBLIC_EAZO_PUBLIC_KEY;
+export function getAppId(): string | null {
+  if (appId) return appId;
+  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_EAZO_APP_ID) {
+    return process.env.NEXT_PUBLIC_EAZO_APP_ID;
   }
   return null;
 }
@@ -36,5 +36,5 @@ export function getApiBase(override?: string): string {
 }
 
 export function __resetConfig(): void {
-  publicKey = null;
+  appId = null;
 }

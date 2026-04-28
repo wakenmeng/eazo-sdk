@@ -59,10 +59,10 @@ await auth.sendEmailCode(email)
 await auth.logout()
 
 auth.fetchSocialConnections()               // SocialConnection[]
-auth.configure({ publicKey: "..." })        // set developer public key
+auth.configure({ appId: "..." })        // set Eazo app id
 ```
 
-By default the SDK reads `NEXT_PUBLIC_EAZO_PUBLIC_KEY` from the environment. Call `auth.configure({ publicKey })` if you need to set it explicitly.
+By default the SDK reads `NEXT_PUBLIC_EAZO_APP_ID` from the environment. Call `auth.configure({ appId })` if you need to set it explicitly.
 
 #### `auth.login()` — unified login flow
 
@@ -188,6 +188,6 @@ App code never branches on environment — the capability API is the same on bot
 
 | Variable | Required | Used by |
 |---|---|---|
-| `NEXT_PUBLIC_EAZO_PUBLIC_KEY` | web login | `auth.loginWith*` |
+| `NEXT_PUBLIC_EAZO_APP_ID` | web login | `auth.loginWith*` |
 | `NEXT_PUBLIC_EAZO_API_URL` | optional | default `backendUrl` when web-only |
 | `EAZO_PRIVATE_KEY` | server | `requireAuth` |
