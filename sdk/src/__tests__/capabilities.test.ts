@@ -102,7 +102,6 @@ describe("auth capability — mobile host", () => {
       device: {
         platform: "mobile",
         locale: "zh-CN",
-        safeArea: { top: 44, bottom: 34 },
         backendUrl: "https://api.test",
       },
       capabilities: ["auth.*", "device.getContext"],
@@ -133,7 +132,6 @@ describe("auth capability — mobile host", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        safeArea: { top: 0, bottom: 0 },
         backendUrl: "",
       },
       capabilities: ["auth.*"],
@@ -187,7 +185,6 @@ describe("device capability", () => {
       device: {
         platform: "mobile",
         locale: "ja-JP",
-        safeArea: { top: 50, bottom: 30 },
         backendUrl: "https://backend.example",
       },
       capabilities: [],
@@ -195,7 +192,6 @@ describe("device capability", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(device.platform).toBe("mobile");
     expect(device.locale).toBe("ja-JP");
-    expect(device.safeArea).toEqual({ top: 50, bottom: 30 });
     expect(device.backendUrl).toBe("https://backend.example");
   });
 });

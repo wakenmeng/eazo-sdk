@@ -8,7 +8,7 @@ import { _bootstrapDevice } from "./internal/capabilities/device";
 import { LoginUI } from "./internal/login-ui";
 import { ShareDownloadModal } from "./internal/share-ui";
 import { store, INITIAL_STATE } from "./internal/store";
-import type { DeviceContext, EazoState } from "./types";
+import type { EazoState } from "./types";
 
 const MountedContext = React.createContext(false);
 
@@ -30,8 +30,6 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
     void _bootstrapDevice();
   }, []);
 
-  useSafeAreaCssVars();
-
   return (
     <MountedContext.Provider value={true}>
       {props.children}
@@ -42,33 +40,11 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
 }
 
 /**
- * Mirrors the reported device safe area onto `document.documentElement` as
- * `--eazo-safe-area-top` / `--eazo-safe-area-bottom`. Apps reference these
- * from CSS (`padding-top: var(--eazo-safe-area-top, 0)`) to avoid the host
- * chrome (status bar, "Hosted by Eazo" pill, etc.) without needing to read
- * device state themselves.
- */
-function useSafeAreaCssVars(): void {
-  const safeArea = React.useSyncExternalStore<DeviceContext["safeArea"]>(
-    store.subscribe,
-    () => store.getSnapshot().device.safeArea,
-    () => INITIAL_STATE.device.safeArea,
-  );
-
-  React.useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    root.style.setProperty("--eazo-safe-area-top", `${safeArea.top}px`);
-    root.style.setProperty("--eazo-safe-area-bottom", `${safeArea.bottom}px`);
-  }, [safeArea.top, safeArea.bottom]);
-}
-
-/**
  * Subscribe to a slice of the Eazo state. The selector runs on every update;
  * the hook only re-renders when the selector's return value changes (Object.is).
  *
  *   const user = useEazo(s => s.auth.user);
- *   const { platform, safeArea } = useEazo(s => s.device);
+ *   const { platform, locale } = useEazo(s => s.device);
  */
 export function useEazo<T>(selector: (state: EazoState) => T): T {
   const mounted = React.useContext(MountedContext);

@@ -58,7 +58,6 @@ describe("useEazo", () => {
         device: {
           platform: "mobile",
           locale: "en",
-          safeArea: { top: 0, bottom: 0 },
           backendUrl: "",
         },
         capabilities: ["auth.*"],

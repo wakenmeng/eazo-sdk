@@ -13,7 +13,6 @@ export interface User {
 export interface DeviceContext {
   platform: "web" | "mobile";
   locale: string;
-  safeArea: { top: number; bottom: number };
   backendUrl: string;
 }
 

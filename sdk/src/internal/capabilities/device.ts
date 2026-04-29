@@ -1,5 +1,5 @@
 import type { DeviceContext } from "../../types";
-import { getBridge, waitForBootstrap } from "../bootstrap";
+import { waitForBootstrap } from "../bootstrap";
 import { setDevice, store } from "../store";
 
 function webDefaults(): DeviceContext {
@@ -10,7 +10,6 @@ function webDefaults(): DeviceContext {
   return {
     platform: "web",
     locale,
-    safeArea: { top: 0, bottom: 0 },
     backendUrl,
   };
 }
@@ -32,12 +31,6 @@ function ensureBootstrap(): Promise<void> {
     const hello = await waitForBootstrap();
     if (!hello) return;
     setDevice(hello.device);
-    const bridge = getBridge();
-    bridge?.on("device.safeArea.changed", (payload) => {
-      const patch = payload as Partial<DeviceContext["safeArea"]>;
-      const current = store.getSnapshot().device.safeArea;
-      setDevice({ safeArea: { ...current, ...patch } });
-    });
   })();
   return bootstrapPromise;
 }
@@ -51,11 +44,6 @@ export const device = {
   get locale(): string {
     ensureBootstrap().catch(() => undefined);
     return store.getSnapshot().device.locale;
-  },
-
-  get safeArea(): DeviceContext["safeArea"] {
-    ensureBootstrap().catch(() => undefined);
-    return store.getSnapshot().device.safeArea;
   },
 
   get backendUrl(): string {

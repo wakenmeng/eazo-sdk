@@ -90,21 +90,8 @@ import { device } from "@eazo/sdk";
 
 device.platform                             // 'web' | 'mobile'
 device.locale                               // 'zh-CN' | ...
-device.safeArea                             // { top: number; bottom: number }
 device.backendUrl                           // '' when running web-only
 device.getContext()                         // full DeviceContext
-```
-
-`<EazoProvider>` also mirrors `device.safeArea` onto `document.documentElement` as CSS custom properties so app layouts can avoid host chrome without reading device state directly:
-
-```css
-/* On the web SDK falls back to 0; inside Eazo Mobile the host fills in the
-   effective reserved area (status bar on top, "Hosted by Eazo" chrome on
-   the bottom). */
-body {
-  padding-top: var(--eazo-safe-area-top, 0px);
-  padding-bottom: var(--eazo-safe-area-bottom, 0px);
-}
 ```
 
 ### `share`
@@ -135,7 +122,7 @@ Rule: inside React render, read reactive state via `useEazo(selector)`. Outside 
 
 ```tsx
 const user = useEazo((s) => s.auth.user);
-const { platform, safeArea } = useEazo((s) => s.device);
+const { platform, locale } = useEazo((s) => s.device);
 ```
 
 ### Server (Next.js route handler)
@@ -173,7 +160,6 @@ interface User {
 interface DeviceContext {
   platform: "web" | "mobile";
   locale: string;
-  safeArea: { top: number; bottom: number };
   backendUrl: string;
 }
 ```

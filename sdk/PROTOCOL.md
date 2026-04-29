@@ -64,7 +64,7 @@ The `appId` field on `ready` is the Eazo app ID (e.g. `i_xxx`). Hosts that need 
 - Method names (`fn`): `<capability>.<action>`; action is camelCase
   - Examples: `auth.getToken`, `auth.getSession`, `device.getContext`, `storage.get`
 - Event names (`name`): `<capability>.<event>`; past tense or state descriptor
-  - Examples: `auth.changed`, `device.safeArea.changed`
+  - Examples: `auth.changed`, `auth.loginCancelled`
 
 ## Capability advertisement
 
@@ -103,7 +103,6 @@ The app checks this list before sending a request; unsupported methods fail imme
 |---|---|---|
 | `auth.changed` | `{ authenticated, user, token }` | Login, logout, account switch |
 | `auth.loginCancelled` | — (optional `{ reason?: string }`) | User dismissed the native login UI without authenticating. Causes the app's in-flight `auth.login()` to reject with `DENIED`. |
-| `device.safeArea.changed` | `{ top?, bottom? }` | Keyboard / orientation |
 
 ## Version evolution
 
@@ -122,8 +121,7 @@ window.addEventListener("message", (e) => {
     send({
       ch: "eazo-sdk", v: 1, t: "hello",
       session: { authenticated: true, user, token },
-      device: { platform: "mobile", locale: "zh-CN",
-                safeArea: { top: 44, bottom: 34 }, backendUrl: "https://api.eazo.ai" },
+      device: { platform: "mobile", locale: "zh-CN", backendUrl: "https://api.eazo.ai" },
       capabilities: ["auth.*"],
     });
   }

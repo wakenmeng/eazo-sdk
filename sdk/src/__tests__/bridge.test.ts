@@ -59,7 +59,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "zh-CN",
-        safeArea: { top: 44, bottom: 34 },
         backendUrl: "https://api.test",
       },
       capabilities: ["auth.*", "device.getContext"],
@@ -93,7 +92,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        safeArea: { top: 0, bottom: 0 },
         backendUrl: "",
       },
       capabilities: ["auth.*"],
@@ -124,7 +122,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        safeArea: { top: 0, bottom: 0 },
         backendUrl: "",
       },
       capabilities: ["auth.*"],
@@ -153,7 +150,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        safeArea: { top: 0, bottom: 0 },
         backendUrl: "",
       },
       capabilities: [],
