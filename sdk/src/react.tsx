@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { EazoBrandBanner } from "./internal/banner-ui";
 import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
@@ -33,6 +34,7 @@ export function EazoProvider(props: { children: React.ReactNode }): React.ReactE
   return (
     <MountedContext.Provider value={true}>
       {props.children}
+      <EazoBrandBanner />
       <LoginUI />
       <ShareDownloadModal />
     </MountedContext.Provider>
