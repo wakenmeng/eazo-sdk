@@ -11,6 +11,7 @@ export const AUTH_REQUEST_LOGIN = "auth.requestLogin";
 export const AUTH_CHANGED_EVENT = "auth.changed";
 export const AUTH_LOGIN_CANCELLED_EVENT = "auth.loginCancelled";
 export const SHARE_COMPOSE = "share.compose";
+export const MEMORY_REPORT_ACTION = "memory.reportAction";
 
 export type ErrorCode =
   | "NOT_SUPPORTED"

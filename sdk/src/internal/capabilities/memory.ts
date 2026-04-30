@@ -1,3 +1,5 @@
+import { getBridge, waitForBootstrap } from "../bootstrap";
+import { MEMORY_REPORT_ACTION } from "../bridge/protocol";
 import { getApiBase, getAppId } from "../config";
 import { getHost } from "../env";
 import { auth } from "./auth";
@@ -54,6 +56,27 @@ function detectPlatform(): string {
   return "web";
 }
 
+/**
+ * Forward the action to the mobile host via the SDK bridge. Fire-and-forget:
+ * never throws, never blocks the HTTP report. Only attempted when running
+ * inside the Eazo Mobile WebView; in pure-web / iframe environments this is
+ * a no-op. Failures (NOT_SUPPORTED, TIMEOUT, transport errors) are
+ * intentionally swallowed — the HTTP path remains the source of truth.
+ */
+function notifyMobile(payload: MemoryActionParams): void {
+  if (getHost() !== "eazoMobile") return;
+  void (async (): Promise<void> => {
+    try {
+      const hello = await waitForBootstrap();
+      const bridge = getBridge();
+      if (!hello || !bridge?.getStatus().ready) return;
+      await bridge.request(MEMORY_REPORT_ACTION, payload);
+    } catch {
+      // Best-effort — the HTTP POST below is the durable record.
+    }
+  })();
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -101,6 +124,8 @@ export const memory = {
     const platform = params.platform ?? detectPlatform();
 
     const payload: MemoryActionParams = { ...params, metadata, platform };
+
+    notifyMobile(payload);
 
     const res = await fetch(`${getApiBase()}/api/open/gum/action`, {
       method: "POST",
