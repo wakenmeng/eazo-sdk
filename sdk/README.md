@@ -112,6 +112,23 @@ await share.compose({
 
 `share.compose` throws `INVALID_ARGS` synchronously if neither `text` nor `images` is provided, or if more than 4 images are passed.
 
+### `notifications`
+
+Per-app push-notification subscription, mediated by the host. Calls flow through the postMessage bridge to the mobile shell which writes the per-(user, app) bit; the embedded app never talks to the platform directly here.
+
+```ts
+import { notifications } from "@eazo/sdk";
+
+const { subscribed } = await notifications.isSubscribed();
+if (!subscribed) await notifications.subscribe();   // opt the user in
+// later…
+await notifications.unsubscribe();                  // opt the user out
+```
+
+In a plain browser (no host) every method resolves `{ subscribed: false }` — no throws — so apps can render the right UI during local web development without special-casing.
+
+**Publishing** is a separate, server-side surface — see [`@eazo/sdk/server` notifications](#server-notifications-publish).
+
 ### React integration
 
 ```ts
@@ -138,6 +155,28 @@ export function GET(req: NextRequest) {
 ```
 
 Requires `EAZO_PRIVATE_KEY` in the server environment.
+
+<a id="server-notifications-publish"></a>
+#### `notifications.publish`
+
+Send a system push to every user subscribed to your app. Authenticates by signing an ES256K JWT with `EAZO_PRIVATE_KEY` — there is no user JWT in scope, so this is the right path for cron-driven digests, event-driven alerts, or any backend-originated notification.
+
+```ts
+import { notifications } from "@eazo/sdk/server";
+
+export async function POST() {
+  const { delivered, publishId } = await notifications.publish({
+    appId: "i_xxx",
+    title: "Slow-cooker timer",
+    body: "Your stew is ready.",
+    data: { recipeId: "stew-42" },           // optional, surfaces in the device tap handler
+    audience: "subscribers",                  // v1 only value
+  });
+  return Response.json({ delivered, publishId });
+}
+```
+
+Throws `EazoNotificationPublishError` on platform-level errors (`code` 401 = bad JWT, 403 = appId not owned by your key, 413 = >5,000 subscribers, etc.).
 
 ### Testing
 

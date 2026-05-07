@@ -4,7 +4,13 @@
  */
 
 let appId: string | null = null;
-const DEFAULT_API_BASE = "https://eazo.ai";
+
+/**
+ * Default Eazo platform API base. Single source of truth — every SDK
+ * surface that needs to talk to the platform (frontend bootstrap, server
+ * `notifications.publish`, etc.) imports this rather than redeclaring.
+ */
+export const DEFAULT_PLATFORM_API_BASE = "https://eazo.ai";
 
 export function setAppId(id: string | null): void {
   appId = id;
@@ -32,7 +38,7 @@ export function getApiBase(override?: string): string {
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_EAZO_API_URL) {
     return process.env.NEXT_PUBLIC_EAZO_API_URL.replace(/\/$/, "");
   }
-  return DEFAULT_API_BASE;
+  return DEFAULT_PLATFORM_API_BASE;
 }
 
 export function __resetConfig(): void {
