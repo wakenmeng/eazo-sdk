@@ -36,29 +36,18 @@ const API_BASE_ENV_NAMES = [
   "REACT_APP_EAZO_API_URL",
 ] as const;
 
-/**
- * Called synchronously during `<EazoProvider>` render. Internal — not
- * exported from the package root.
- */
+/** Set by `<EazoProvider appId={...}>`. */
 export function setAppId(id: string | null): void {
   appId = id;
 }
 
-/**
- * Returns the explicitly-set app id, or scans the env-var chain as a
- * safety net for non-React harnesses, tests, and pre-Provider call paths.
- * The env fallback is not the documented integration path.
- */
+/** Explicit value via setAppId, then env-name list, then null. */
 export function getAppId(): string | null {
   if (appId) return appId;
   return readEnvByNames(APP_ID_ENV_NAMES);
 }
 
-/**
- * Set by the device capability when `hello.apiBase` arrives from the host.
- * Internal — not re-exported from the package; the only caller is
- * `internal/capabilities/device.ts`.
- */
+/** Set from `hello.apiBase` during device-capability bootstrap. */
 export function setHostApiBase(url: string | null): void {
   hostInjectedApiBase = url ? url.replace(/\/$/, "") : null;
 }
