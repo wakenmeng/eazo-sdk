@@ -59,10 +59,9 @@ await auth.sendEmailCode(email)
 await auth.logout()
 
 auth.fetchSocialConnections()               // SocialConnection[]
-auth.configure({ appId: "..." })        // set Eazo app id
 ```
 
-By default the SDK reads `NEXT_PUBLIC_EAZO_APP_ID` from the environment. Call `auth.configure({ appId })` if you need to set it explicitly.
+The SDK reads its app id from the environment (`NEXT_PUBLIC_EAZO_APP_ID`, `EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`). If you need to inject it programmatically — for example in a Next.js layout that resolves the value at SSR — pass it to `<EazoProvider appId={...}>`.
 
 #### `auth.login()` — unified login flow
 

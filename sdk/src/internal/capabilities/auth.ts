@@ -9,19 +9,14 @@ import {
   BridgeErrorObject,
 } from "../bridge/protocol";
 import { getBridge, waitForBootstrap } from "../bootstrap";
-import { __resetConfig, getAppId, setAppId } from "../config";
+import { __resetConfig, getAppId } from "../config";
 import { setAuth, setLoginUI, store } from "../store";
 
 const SESSION_STORAGE_KEY = "eazo.session";
 
 type AuthListener = (user: User | null) => void;
 
-interface AuthConfig {
-  appId?: string;
-}
-
 let authClient: EazoAuthClient | null = null;
-let authConfig: AuthConfig = {};
 const listeners = new Set<AuthListener>();
 
 function getAuthClient(): EazoAuthClient {
@@ -29,7 +24,7 @@ function getAuthClient(): EazoAuthClient {
   const appId = getAppId();
   if (!appId) {
     throw new Error(
-      "@eazo/sdk: missing app id. Set NEXT_PUBLIC_EAZO_APP_ID or call auth.configure({ appId }).",
+      "@eazo/sdk: app id not configured. Mount <EazoProvider appId={...}> at the root of your app.",
     );
   }
   authClient = new EazoAuthClient({ appId });
@@ -181,7 +176,6 @@ export function __resetAuthCapability(): void {
   webSessionCache = null;
   listeners.clear();
   authClient = null;
-  authConfig = {};
   __resetConfig();
   if (pendingLogin) {
     pendingLogin.reject(new Error("SDK reset"));
@@ -192,10 +186,6 @@ export function __resetAuthCapability(): void {
     pendingLoginTimer = null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// login() / showLogin() / hideLogin() — hermetic, platform-routed login flow
-// ---------------------------------------------------------------------------
 
 export interface LoginOptions {
   /** Milliseconds to wait for the user to complete the flow before rejecting. Default: 5 min. */
@@ -263,13 +253,6 @@ async function requestLoginViaBridge(): Promise<boolean> {
 }
 
 export const auth = {
-  /** Set configuration (app id, overriding the NEXT_PUBLIC_EAZO_APP_ID default). */
-  configure(config: AuthConfig): void {
-    authConfig = { ...authConfig, ...config };
-    if (config.appId !== undefined) setAppId(config.appId ?? null);
-    authClient = null;
-  },
-
   get user(): User | null {
     ensureBootstrap().catch(() => undefined);
     return store.getSnapshot().auth.user;

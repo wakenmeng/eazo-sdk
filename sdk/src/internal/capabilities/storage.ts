@@ -1,38 +1,28 @@
 import { getApiBase, getAppId } from "../config";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface StorageCredentials {
-  /** Presigned PUT URL — upload a file directly to S3 with this URL (PUT, no auth header needed) */
+  /** Presigned PUT URL — issue the request without an auth header. */
   uploadUrl: string;
-  /** Publicly accessible CDN URL for the uploaded object (permanent, no expiry) */
+  /** Permanent CDN URL for the uploaded object (no expiry). */
   publicUrl: string;
-  /** Full S3 object key: app-contents/{md5(ownerId)}/{path} */
+  /** Full S3 object key, e.g. `app-contents/{md5(ownerId)}/{path}`. */
   key: string;
   bucket: string;
   region: string;
-  /** ISO timestamp when the uploadUrl expires */
+  /** ISO timestamp at which `uploadUrl` expires. */
   expiration: string;
 }
 
 export interface UploadResult {
-  /** Full S3 object key */
   key: string;
-  /** Publicly accessible CDN URL */
   url: string;
 }
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 async function fetchCredentials(path: string): Promise<StorageCredentials> {
   const appId = getAppId();
   if (!appId) {
     throw new Error(
-      "@eazo/sdk: missing app id. Set NEXT_PUBLIC_EAZO_APP_ID or call auth.configure({ appId }).",
+      "@eazo/sdk: app id not configured. Mount <EazoProvider appId={...}> at the root of your app.",
     );
   }
 
@@ -55,19 +45,13 @@ async function fetchCredentials(path: string): Promise<StorageCredentials> {
   return json.data;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 export const storage = {
   /**
    * Upload a file to Eazo built-in object storage.
    *
-   * Internally this:
-   *  1. Requests a presigned PUT URL from portal-agent-server (scoped to your
-   *     tenant prefix via STS Session Policy).
-   *  2. PUTs the file directly to S3 — no platform bandwidth used.
-   *  3. Returns the S3 key and a permanent CDN URL.
+   * Two-step: requests a presigned PUT URL (tenant-scoped via STS Session
+   * Policy), then PUTs directly to S3 — no platform bandwidth in the
+   * critical path. Returns the S3 key and a permanent CDN URL.
    *
    * @param path  Relative object path, e.g. "todos/123/avatar.png"
    * @param file  File or Blob to upload

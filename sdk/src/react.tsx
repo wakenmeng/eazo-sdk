@@ -21,15 +21,22 @@ const MountedContext = React.createContext(false);
  *     <App />
  *   </EazoProvider>
  *
- * Renders the shared login and share UIs so `auth.login()` and
- * `share.compose()` work anywhere in the app without extra mounts.
+ * `<EazoProvider>` is how an app's appId reaches every SDK capability
+ * (`auth`, `device`, `share`, `storage`, `memory`); every project must
+ * pass one. Also mounts the shared login and share UIs so `auth.login()`
+ * and `share.compose()` work anywhere in the tree.
  */
 export function EazoProvider(props: {
   children: React.ReactNode;
-  /** Eazo app ID. Falls back to env (`EAZO_APP_ID` and framework-prefixed aliases). */
-  appId?: string | null;
+  /** Eazo app ID. Required. */
+  appId: string;
 }): React.ReactElement {
-  if (props.appId) setAppId(props.appId);
+  if (!props.appId) {
+    throw new Error(
+      "@eazo/sdk: <EazoProvider appId> is required. Pass your Eazo app id explicitly.",
+    );
+  }
+  setAppId(props.appId);
 
   React.useEffect(() => {
     // Starting the bridge is idempotent; capability access may have already done so.
@@ -49,8 +56,8 @@ export function EazoProvider(props: {
 }
 
 /**
- * Subscribe to a slice of the Eazo state. The selector runs on every update;
- * the hook only re-renders when the selector's return value changes (Object.is).
+ * Subscribe to a slice of state. Re-renders only when the selector's
+ * return value changes (Object.is).
  *
  *   const user = useEazo(s => s.auth.user);
  *   const { platform, locale } = useEazo(s => s.device);

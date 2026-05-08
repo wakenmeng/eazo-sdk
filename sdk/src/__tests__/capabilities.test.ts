@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { auth } from "../internal/capabilities/auth";
 import { device } from "../internal/capabilities/device";
+import { setAppId } from "../internal/config";
 import { CHANNEL, VERSION } from "../internal/bridge/protocol";
 import { __resetSDK, __dispatchHostMessage } from "../testing";
 
@@ -23,7 +24,7 @@ describe("auth capability — web fallback", () => {
   beforeEach(() => {
     __resetSDK();
     removeRN();
-    auth.configure({ appId: "test-key" });
+    setAppId("test-key");
     originalFetch = globalThis.fetch;
   });
 
@@ -77,7 +78,7 @@ describe("auth capability — mobile host", () => {
   beforeEach(() => {
     __resetSDK();
     installRN(() => undefined);
-    auth.configure({ appId: "test-key" });
+    setAppId("test-key");
   });
 
   afterEach(() => {

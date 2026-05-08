@@ -1,11 +1,10 @@
 /**
- * Shared runtime configuration — kept dependency-free so both bootstrap
- * and capability modules can read/write without circular imports.
+ * Shared runtime configuration. Dependency-free so both bootstrap and
+ * capability modules can read/write without circular imports.
  */
 
 let appId: string | null = null;
 
-/** Default Eazo platform API base. */
 export const DEFAULT_PLATFORM_API_BASE = "https://eazo.ai";
 
 function readEnvByNames(names: readonly string[]): string | null {
@@ -37,21 +36,23 @@ const API_BASE_ENV_NAMES = [
 ] as const;
 
 /**
- * Override the app id imperatively. Required for Vite — Vite only
- * substitutes `import.meta.env.VITE_*`, not `process.env.VITE_*`, so the
- * env-name fallback list below cannot reach Vite values without a shim.
+ * Called synchronously during `<EazoProvider>` render. Internal — not
+ * exported from the package root.
  */
 export function setAppId(id: string | null): void {
   appId = id;
 }
 
-/** Returns the configured Eazo app ID, or null if unset. */
+/**
+ * Returns the explicitly-set app id, or scans the env-var chain as a
+ * safety net for non-React harnesses, tests, and pre-Provider call paths.
+ * The env fallback is not the documented integration path.
+ */
 export function getAppId(): string | null {
   if (appId) return appId;
   return readEnvByNames(APP_ID_ENV_NAMES);
 }
 
-/** Returns the configured API base URL. */
 export function getApiBase(override?: string): string {
   if (override) return override.replace(/\/$/, "");
   const fromEnv = readEnvByNames(API_BASE_ENV_NAMES);

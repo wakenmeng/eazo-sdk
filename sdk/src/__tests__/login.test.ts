@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { auth } from "../internal/capabilities/auth";
+import { setAppId } from "../internal/config";
 import {
   AUTH_CHANGED_EVENT,
   AUTH_LOGIN_CANCELLED_EVENT,
@@ -50,7 +51,7 @@ describe("auth.login — mobile host path", () => {
     __resetSDK();
     sent = [];
     installRN((payload) => sent.push(payload));
-    auth.configure({ appId: "test-key" });
+    setAppId("test-key");
   });
 
   afterEach(() => {
@@ -154,7 +155,7 @@ describe("auth.login — already authenticated", () => {
   beforeEach(() => {
     __resetSDK();
     installRN(() => undefined);
-    auth.configure({ appId: "test-key" });
+    setAppId("test-key");
   });
 
   afterEach(() => {
@@ -178,7 +179,7 @@ describe("auth.login — web path", () => {
   beforeEach(() => {
     __resetSDK();
     removeRN();
-    auth.configure({ appId: "test-key" });
+    setAppId("test-key");
   });
 
   afterEach(() => {

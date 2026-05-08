@@ -4,48 +4,35 @@ import { getApiBase, getAppId } from "../config";
 import { getHost } from "../env";
 import { auth } from "./auth";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface MemoryActionParams {
-  /** Readable description of the user action, e.g. "User clicked the publish button on the app editor page" */
+  /** Readable description, e.g. "User clicked publish on the app editor page" */
   content: string;
   /** ISO 8601 timestamp. Defaults to now when omitted. */
   timestamp?: string;
-  /** Associate this action with a Gum session ID */
+  /** Gum session ID to associate this action with */
   session_id?: string;
   /** Action category, e.g. "click", "search", "page_view" */
   event_type?: string;
   /** Page identifier where the action occurred, e.g. "app_editor" */
   page?: string;
   /**
-   * Structured event data. Must include `appid` (auto-injected from NEXT_PUBLIC_EAZO_APP_ID
-   * when omitted) plus any event-specific fields.
+   * Structured event data. `appid` is auto-injected from
+   * `<EazoProvider appId>` when omitted; supply any event-specific fields
+   * here.
    */
   metadata?: Record<string, unknown>;
-  /** Device identifier */
   device_id?: string;
-  /** App identifier */
   app?: string;
   /**
-   * Platform. Auto-detected when omitted:
-   *   "ios"     — React Native WebView on iOS
-   *   "android" — React Native WebView on Android
+   * Auto-detected when omitted:
+   *   "ios"     — RN WebView on iOS
+   *   "android" — RN WebView on Android
    *   "web"     — plain browser
    */
   platform?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Detect platform from the runtime environment.
- * Returns "ios" or "android" when running inside the Eazo Mobile WebView,
- * "web" otherwise.
- */
+/** "ios" / "android" inside the Eazo Mobile WebView, "web" otherwise. */
 function detectPlatform(): string {
   if (typeof window === "undefined") return "web";
   if (getHost() === "eazoMobile") {
@@ -57,11 +44,9 @@ function detectPlatform(): string {
 }
 
 /**
- * Forward the action to the mobile host via the SDK bridge. Fire-and-forget:
- * never throws, never blocks the HTTP report. Only attempted when running
- * inside the Eazo Mobile WebView; in pure-web / iframe environments this is
- * a no-op. Failures (NOT_SUPPORTED, TIMEOUT, transport errors) are
- * intentionally swallowed — the HTTP path remains the source of truth.
+ * Fire-and-forget side-channel to the mobile host. Never throws, never
+ * blocks the HTTP report below — that's the durable record. No-op outside
+ * the Eazo Mobile WebView.
  */
 function notifyMobile(payload: MemoryActionParams): void {
   if (getHost() !== "eazoMobile") return;
@@ -77,20 +62,12 @@ function notifyMobile(payload: MemoryActionParams): void {
   })();
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 export const memory = {
   /**
    * Report a user action event to Gum memory service.
    *
-   * Requires the user to be authenticated — the current session is forwarded
-   * automatically via `x-eazo-session`. The app ID is read from
-   * `NEXT_PUBLIC_EAZO_APP_ID` or set via `auth.configure({ appId })`.
-   *
-   * `metadata.appid` is automatically set to the app ID when not supplied.
-   * `platform` is auto-detected ("ios" / "android" / "web") when not supplied.
+   * Requires the user to be authenticated — `x-eazo-session` is forwarded
+   * automatically. The app id comes from `<EazoProvider appId>`.
    *
    * @example
    * ```ts
@@ -106,7 +83,7 @@ export const memory = {
     const appId = getAppId();
     if (!appId) {
       throw new Error(
-        "@eazo/sdk: missing app id. Set NEXT_PUBLIC_EAZO_APP_ID or call auth.configure({ appId }).",
+        "@eazo/sdk: app id not configured. Mount <EazoProvider appId={...}> at the root of your app.",
       );
     }
 
@@ -117,10 +94,8 @@ export const memory = {
       );
     }
 
-    // Ensure metadata.appid is always present.
+    // Caller's metadata wins if it sets `appid`; otherwise stamp ours in.
     const metadata: Record<string, unknown> = { appid: appId, ...params.metadata };
-
-    // Auto-detect platform when not provided by the caller.
     const platform = params.platform ?? detectPlatform();
 
     const payload: MemoryActionParams = { ...params, metadata, platform };

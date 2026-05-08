@@ -1,4 +1,4 @@
-import { getApiBase } from "../config";
+import { getApiBase, getAppId } from "../config";
 import { waitForBootstrap, getBridge } from "../bootstrap";
 import { BridgeErrorObject, SHARE_COMPOSE } from "../bridge/protocol";
 import { setShareUI } from "../store";
@@ -18,8 +18,10 @@ export interface ShareComposeInput {
    */
   images?: string[];
   /**
-   * Optional attribution — the id of the app that originated the share.
-   * The host may use this to attach an "app mention" pill to the post.
+   * Optional attribution override — the id of the app that originated the
+   * share. Defaults to the running app's id (`getAppId()`); pass an explicit
+   * value only when forwarding a share that originated in a different app.
+   * The host uses this to attach an "app mention" pill to the post.
    */
   sourceAppId?: string;
 }
@@ -96,6 +98,13 @@ export const share = {
     validate(input);
     const payload = normalize(input);
 
+    // Auto-stamp the running app's id when the caller didn't supply an
+    // explicit override. Mirrors the same default applied in `memory`.
+    if (!payload.sourceAppId) {
+      const appId = getAppId();
+      if (appId) payload.sourceAppId = appId;
+    }
+
     const hello = await waitForBootstrap();
     const bridge = getBridge();
 
@@ -106,19 +115,15 @@ export const share = {
         // payload (the request resolved successfully).
         return { accepted: result?.accepted ?? true };
       } catch (err) {
-        if (
+        const fallbackable =
           err instanceof BridgeErrorObject &&
-          (err.code === "NOT_SUPPORTED" || err.code === "TIMEOUT")
-        ) {
-          // Fall through to the web fallback (download CTA).
-        } else {
-          throw err;
-        }
+          (err.code === "NOT_SUPPORTED" || err.code === "TIMEOUT");
+        if (!fallbackable) throw err;
+        // fall through to web fallback
       }
     }
 
-    // Web fallback: open the download modal. Keep this behavior side-
-    // effectful but predictable — apps can detect it via `accepted: false`.
+    // Side-effectful but observable: apps detect this branch via `accepted: false`.
     if (typeof document !== "undefined") {
       setShareUI({ open: true });
     }
