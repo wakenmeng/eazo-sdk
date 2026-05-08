@@ -38,7 +38,6 @@ function dispatchHello(capabilities: string[], authenticated = false): void {
     device: {
       platform: "mobile",
       locale: "en-US",
-      backendUrl: "",
     },
     capabilities,
   });

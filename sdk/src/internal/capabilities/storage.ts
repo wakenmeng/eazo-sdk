@@ -1,4 +1,4 @@
-import { getApiBase, getAppId } from "../config";
+import { getPlatformApiBase, getAppId } from "../config";
 
 export interface StorageCredentials {
   /** Presigned PUT URL — issue the request without an auth header. */
@@ -26,7 +26,7 @@ async function fetchCredentials(path: string): Promise<StorageCredentials> {
     );
   }
 
-  const res = await fetch(`${getApiBase()}/api/open/storage-credentials`, {
+  const res = await fetch(`${getPlatformApiBase()}/api/open/storage-credentials`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ appId, path }),

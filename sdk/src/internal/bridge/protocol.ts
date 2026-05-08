@@ -52,6 +52,12 @@ export interface HelloEnvelope extends EnvelopeBase<"hello"> {
   };
   device: DeviceContext;
   capabilities: string[];
+  /**
+   * Eazo platform API base the host is wired to. SDK-internal — apps never
+   * read it. Lets the SDK target the same platform tier the host uses
+   * (prod / staging / local dev) without relying on the embedded app's env.
+   */
+  apiBase?: string;
 }
 
 export interface RequestEnvelope extends EnvelopeBase<"req"> {

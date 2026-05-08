@@ -8,11 +8,19 @@ English | [中文](./README.zh-CN.md)
 
 **`@eazo/sdk`** — [`sdk/`](./sdk/) — Capability-first SDK for Eazo apps. One codebase runs seamlessly in the browser and inside the Eazo Mobile WebView.
 
-- `auth` — unified login flow (web UI in browsers; delegates to native host on Eazo Mobile), session management, user profile, token retrieval
-- `device` — runtime context (platform, locale, safe area, backend URL)
+Capabilities (`import { … } from "@eazo/sdk"`):
+
+- `auth` — unified login flow (web UI in browsers; mobile inherits the host's signed-in user via `hello.session`), session management, JWT retrieval
+- `device` — runtime context (platform, locale, backend URL)
+- `share` — hand text + images to the platform's compose surface
+- `storage` — presigned S3 upload / download
+- `memory` — Gum memory service client
+- `ai` — OpenAI-compatible AI gateway
+- `notifications` — per-app push subscription toggle (frontend); `notifications.publish` from `@eazo/sdk/server` for server-to-server pushes
 - `useEazo(selector)` — React integration via `useSyncExternalStore`
-- `requireAuth` — server-side decrypt + guard for Next.js API routes
-- ECC secp256k1 + AES-256-GCM hybrid encryption for session tokens (built in)
+- `requireAuth` — server-side session decrypt + guard for Next.js / Remix route handlers
+
+Built-in crypto: ECC secp256k1 + AES-256-GCM (session tokens), ES256K JWT (server-to-server publish auth).
 
 **Install:**
 
@@ -23,11 +31,15 @@ npm install @eazo/sdk
 **Quick example:**
 
 ```tsx
-// app/layout.tsx
+// app/layout.tsx — Server Component
 import { EazoProvider } from "@eazo/sdk/react";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <EazoProvider>{children}</EazoProvider>;
+  return (
+    <EazoProvider appId={process.env.EAZO_APP_ID}>
+      {children}
+    </EazoProvider>
+  );
 }
 ```
 
@@ -43,7 +55,17 @@ function Header() {
 }
 ```
 
-See [`sdk/README.md`](./sdk/README.md) for the full API and [`sdk/PROTOCOL.md`](./sdk/PROTOCOL.md) for the host-app wire protocol.
+```ts
+// Server route — push to subscribers
+import { notifications } from "@eazo/sdk/server";
+
+await notifications.publish({
+  title: "Daily reminder",
+  body: "Your tasks are waiting.",
+});
+```
+
+Configure via `EAZO_APP_ID` and `EAZO_PRIVATE_KEY` in env. See [`sdk/README.md`](./sdk/README.md) for the full API and [`sdk/PROTOCOL.md`](./sdk/PROTOCOL.md) for the host-app wire protocol.
 
 ## Security
 

@@ -59,7 +59,6 @@ describe("useEazo", () => {
         device: {
           platform: "mobile",
           locale: "en",
-          backendUrl: "",
         },
         capabilities: ["auth.*"],
       });

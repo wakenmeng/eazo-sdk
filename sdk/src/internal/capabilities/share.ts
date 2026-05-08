@@ -1,11 +1,11 @@
-import { getApiBase, getAppId } from "../config";
+import { getPlatformApiBase, getAppId } from "../config";
 import { waitForBootstrap, getBridge } from "../bootstrap";
 import { BridgeErrorObject, SHARE_COMPOSE } from "../bridge/protocol";
 import { setShareUI } from "../store";
 
 const MAX_IMAGES = 4;
 export function getShareDownloadUrl(): string {
-  return `${getApiBase()}/`;
+  return `${getPlatformApiBase()}/`;
 }
 
 export interface ShareComposeInput {

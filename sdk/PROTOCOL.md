@@ -29,6 +29,7 @@ interface Hello {
   session:       { authenticated: boolean; user: User | null; token: string | null };
   device:        DeviceContext;
   capabilities:  string[];   // e.g. ["auth.*", "device.getContext", "storage.get"]
+  apiBase?:      string;     // Eazo platform URL the host is wired to; SDK-internal
 }
 
 interface Request    { ch: "eazo-sdk"; v: 1; t: "req"; id: string; fn: string; args?: unknown; }
@@ -126,8 +127,9 @@ window.addEventListener("message", (e) => {
     send({
       ch: "eazo-sdk", v: 1, t: "hello",
       session: { authenticated: true, user, token },
-      device: { platform: "mobile", locale: "zh-CN", backendUrl: "https://api.eazo.ai" },
+      device: { platform: "mobile", locale: "zh-CN" },
       capabilities: ["auth.*"],
+      apiBase: "https://api.eazo.ai",
     });
   }
 

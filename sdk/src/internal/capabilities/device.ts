@@ -1,16 +1,14 @@
 import type { DeviceContext } from "../../types";
 import { waitForBootstrap } from "../bootstrap";
+import { setHostApiBase } from "../config";
 import { setDevice, store } from "../store";
 
 function webDefaults(): DeviceContext {
   const locale =
     typeof navigator !== "undefined" && navigator.language ? navigator.language : "en-US";
-  const backendUrl =
-    (typeof process !== "undefined" ? process.env.NEXT_PUBLIC_EAZO_API_URL : "") ?? "";
   return {
     platform: "web",
     locale,
-    backendUrl,
   };
 }
 
@@ -30,6 +28,7 @@ function ensureBootstrap(): Promise<void> {
     setDevice(webDefaults());
     const hello = await waitForBootstrap();
     if (!hello) return;
+    setHostApiBase(hello.apiBase ?? null);
     setDevice(hello.device);
   })();
   return bootstrapPromise;
@@ -44,11 +43,6 @@ export const device = {
   get locale(): string {
     ensureBootstrap().catch(() => undefined);
     return store.getSnapshot().device.locale;
-  },
-
-  get backendUrl(): string {
-    ensureBootstrap().catch(() => undefined);
-    return store.getSnapshot().device.backendUrl;
   },
 
   getContext(): DeviceContext {

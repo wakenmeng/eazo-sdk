@@ -103,7 +103,6 @@ describe("auth capability — mobile host", () => {
       device: {
         platform: "mobile",
         locale: "zh-CN",
-        backendUrl: "https://api.test",
       },
       capabilities: ["auth.*", "device.getContext"],
     });
@@ -133,7 +132,6 @@ describe("auth capability — mobile host", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        backendUrl: "",
       },
       capabilities: ["auth.*"],
     });
@@ -186,13 +184,29 @@ describe("device capability", () => {
       device: {
         platform: "mobile",
         locale: "ja-JP",
-        backendUrl: "https://backend.example",
       },
       capabilities: [],
     });
     await new Promise((r) => setTimeout(r, 20));
     expect(device.platform).toBe("mobile");
     expect(device.locale).toBe("ja-JP");
-    expect(device.backendUrl).toBe("https://backend.example");
+  });
+
+  it("picks up host-injected apiBase from hello and routes platform calls through it", async () => {
+    installRN(() => undefined);
+    void device.platform;
+    await new Promise((r) => setTimeout(r, 10));
+    __dispatchHostMessage({
+      ch: CHANNEL,
+      v: VERSION,
+      t: "hello",
+      session: { authenticated: false, user: null, token: null },
+      device: { platform: "mobile", locale: "en-US" },
+      capabilities: [],
+      apiBase: "https://staging.example/",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const { getPlatformApiBase } = await import("../internal/config");
+    expect(getPlatformApiBase()).toBe("https://staging.example");
   });
 });

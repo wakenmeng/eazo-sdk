@@ -59,7 +59,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "zh-CN",
-        backendUrl: "https://api.test",
       },
       capabilities: ["auth.*", "device.getContext"],
     };
@@ -92,7 +91,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        backendUrl: "",
       },
       capabilities: ["auth.*"],
     } satisfies HelloEnvelope);
@@ -122,7 +120,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        backendUrl: "",
       },
       capabilities: ["auth.*"],
     } satisfies HelloEnvelope);
@@ -150,7 +147,6 @@ describe("BridgeClient", () => {
       device: {
         platform: "mobile",
         locale: "en-US",
-        backendUrl: "",
       },
       capabilities: [],
     } satisfies HelloEnvelope);

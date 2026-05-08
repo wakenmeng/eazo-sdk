@@ -1,6 +1,6 @@
 import { AuthenticationClient, EmailScene } from "authing-js-sdk";
 
-import { getApiBase } from "../config";
+import { getPlatformApiBase } from "../config";
 import type { EazoAuthClientConfig, SessionToken, SocialConnection } from "./types";
 
 const DEFAULT_AUTH_APP_ID     = "6972f32040acf5801552404b";
@@ -27,7 +27,7 @@ export class EazoAuthClient {
     this.appId         = config.appId;
     this.authAppId     = config.authAppId     ?? DEFAULT_AUTH_APP_ID;
     this.authAppDomain = config.authAppDomain ?? DEFAULT_AUTH_APP_DOMAIN;
-    this.apiBase       = getApiBase(config.apiBase);
+    this.apiBase       = getPlatformApiBase(config.apiBase);
   }
 
   /**

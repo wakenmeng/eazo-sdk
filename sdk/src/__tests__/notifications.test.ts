@@ -32,7 +32,7 @@ function dispatchHello(capabilities: string[]): void {
       user: { id: "u1", email: null, name: "U", avatarUrl: null },
       token: "tok",
     },
-    device: { platform: "mobile", locale: "en-US", backendUrl: "" },
+    device: { platform: "mobile", locale: "en-US" },
     capabilities,
   });
 }

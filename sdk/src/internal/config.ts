@@ -4,6 +4,7 @@
  */
 
 let appId: string | null = null;
+let hostInjectedApiBase: string | null = null;
 
 export const DEFAULT_PLATFORM_API_BASE = "https://eazo.ai";
 
@@ -53,8 +54,18 @@ export function getAppId(): string | null {
   return readEnvByNames(APP_ID_ENV_NAMES);
 }
 
-export function getApiBase(override?: string): string {
+/**
+ * Set by the device capability when `hello.apiBase` arrives from the host.
+ * Internal — not re-exported from the package; the only caller is
+ * `internal/capabilities/device.ts`.
+ */
+export function setHostApiBase(url: string | null): void {
+  hostInjectedApiBase = url ? url.replace(/\/$/, "") : null;
+}
+
+export function getPlatformApiBase(override?: string): string {
   if (override) return override.replace(/\/$/, "");
+  if (hostInjectedApiBase) return hostInjectedApiBase;
   const fromEnv = readEnvByNames(API_BASE_ENV_NAMES);
   if (fromEnv) return fromEnv.replace(/\/$/, "");
   return DEFAULT_PLATFORM_API_BASE;
@@ -66,4 +77,5 @@ export function readAppIdFromEnv(): string | null {
 
 export function __resetConfig(): void {
   appId = null;
+  hostInjectedApiBase = null;
 }

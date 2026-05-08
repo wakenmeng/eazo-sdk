@@ -13,7 +13,6 @@ export interface User {
 export interface DeviceContext {
   platform: "web" | "mobile";
   locale: string;
-  backendUrl: string;
 }
 
 export interface AuthState {

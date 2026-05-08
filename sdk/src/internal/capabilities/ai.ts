@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { getApiBase } from "../config";
+import { getPlatformApiBase } from "../config";
 
 // ---------------------------------------------------------------------------
 // Private key storage
@@ -27,7 +27,7 @@ function buildClient(): OpenAI {
     );
   }
   return new OpenAI({
-    baseURL: `${getApiBase()}/v1`,
+    baseURL: `${getPlatformApiBase()}/v1`,
     apiKey: key,
   });
 }

@@ -3,7 +3,7 @@ import { ec as EC } from "elliptic";
 
 import { EazoAuthServer } from "./internal/auth-primitive";
 import type { SessionToken, UserInfo } from "./internal/auth-primitive";
-import { DEFAULT_PLATFORM_API_BASE, readAppIdFromEnv } from "./internal/config";
+import { getPlatformApiBase, readAppIdFromEnv } from "./internal/config";
 
 import type { User } from "./types";
 
@@ -87,16 +87,6 @@ export class EazoNotificationPublishError extends Error {
     this.code = code;
     this.publishId = publishId;
   }
-}
-
-function getApiBase(): string {
-  // Prefer an explicit server-side env var; fall back to the same NEXT_PUBLIC
-  // variable the frontend reads, then to the production default.
-  const fromEnv =
-    (typeof process !== "undefined" &&
-      (process.env.EAZO_API_BASE || process.env.NEXT_PUBLIC_EAZO_API_URL)) ||
-    "";
-  return (fromEnv || DEFAULT_PLATFORM_API_BASE).replace(/\/$/, "");
 }
 
 function base64urlEncode(buf: Buffer | string): string {
@@ -183,7 +173,7 @@ export const notifications = {
       jti: crypto.randomUUID(),
     });
 
-    const url = `${getApiBase()}/api/open/notifications/publish`;
+    const url = `${getPlatformApiBase()}/api/open/notifications/publish`;
     const res = await fetch(url, {
       method: "POST",
       headers: {

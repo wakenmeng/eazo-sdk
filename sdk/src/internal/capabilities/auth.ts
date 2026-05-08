@@ -61,9 +61,7 @@ function notifyListeners(user: User | null): void {
 }
 
 async function fetchWebUserProfile(session: SessionToken): Promise<User> {
-  // Profile endpoint is always app-local (the app runs requireAuth server-side).
-  // device.backendUrl / NEXT_PUBLIC_EAZO_API_URL points at the Eazo platform, not the app,
-  // so it must not be used here.
+  // Profile endpoint is always app-local — never prefix with the platform base.
   const res = await fetch("/api/user/profile", {
     headers: { "x-eazo-session": JSON.stringify(session) },
   });

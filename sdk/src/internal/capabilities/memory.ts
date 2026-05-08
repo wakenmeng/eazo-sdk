@@ -1,6 +1,6 @@
 import { getBridge, waitForBootstrap } from "../bootstrap";
 import { MEMORY_REPORT_ACTION } from "../bridge/protocol";
-import { getApiBase, getAppId } from "../config";
+import { getPlatformApiBase, getAppId } from "../config";
 import { getHost } from "../env";
 import { auth } from "./auth";
 
@@ -102,7 +102,7 @@ export const memory = {
 
     notifyMobile(payload);
 
-    const res = await fetch(`${getApiBase()}/api/open/gum/action`, {
+    const res = await fetch(`${getPlatformApiBase()}/api/open/gum/action`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

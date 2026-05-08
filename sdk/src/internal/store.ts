@@ -26,7 +26,6 @@ const INITIAL_AUTH: AuthState = {
 const INITIAL_DEVICE: DeviceContext = {
   platform: "web",
   locale: "en-US",
-  backendUrl: "",
 };
 
 const INITIAL_LOGIN_UI: LoginUIState = {
