@@ -6,7 +6,9 @@ import {
   AUTH_CHANGED_EVENT,
   AUTH_LOGIN_CANCELLED_EVENT,
   AUTH_REQUEST_LOGIN,
+  AUTH_REQUEST_LOGOUT,
   BridgeErrorObject,
+  isCapabilitySupported,
 } from "../bridge/protocol";
 import { getBridge, waitForBootstrap } from "../bootstrap";
 import { __resetConfig, getAppId } from "../config";
@@ -332,7 +334,37 @@ export const auth = {
     return getAuthClient().fetchSocialConnections();
   },
 
+  /**
+   * Sign the user out.
+   *
+   * Web: clears the SDK's local session and notifies listeners.
+   * Mobile: delegates to the host via `auth.requestLogout`. The host owns
+   *   identity — this call may surface a "not supported" message and
+   *   leave state unchanged, or trigger a real logout that arrives back
+   *   through `auth.changed`. The SDK never clears local state on the
+   *   mobile path; the host is the source of truth.
+   */
   async logout(): Promise<void> {
+    const hello = await waitForBootstrap();
+    const bridge = getBridge();
+    if (
+      hello &&
+      isCapabilitySupported(hello.capabilities, AUTH_REQUEST_LOGOUT) &&
+      bridge?.getStatus().ready
+    ) {
+      try {
+        await bridge.request(AUTH_REQUEST_LOGOUT);
+        return;
+      } catch (err) {
+        if (
+          !(err instanceof BridgeErrorObject) ||
+          (err.code !== "NOT_SUPPORTED" && err.code !== "TIMEOUT")
+        ) {
+          throw err;
+        }
+        // capability advertised but RPC failed — fall through to local clear
+      }
+    }
     webSessionCache = null;
     writeLocalSession(null);
     setAuth({ user: null, loading: false, authenticated: false });

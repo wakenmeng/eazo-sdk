@@ -8,6 +8,7 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 
 // Host-mediated method and event names used by capabilities.
 export const AUTH_REQUEST_LOGIN = "auth.requestLogin";
+export const AUTH_REQUEST_LOGOUT = "auth.requestLogout";
 export const AUTH_CHANGED_EVENT = "auth.changed";
 export const AUTH_LOGIN_CANCELLED_EVENT = "auth.loginCancelled";
 export const SHARE_COMPOSE = "share.compose";
