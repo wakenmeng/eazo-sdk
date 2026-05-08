@@ -6,6 +6,7 @@ import { EazoBrandBanner } from "./internal/banner-ui";
 import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
+import { setAppId } from "./internal/config";
 import { LoginUI } from "./internal/login-ui";
 import { ShareDownloadModal } from "./internal/share-ui";
 import { store, INITIAL_STATE } from "./internal/store";
@@ -16,14 +17,20 @@ const MountedContext = React.createContext(false);
 /**
  * Mounts the SDK runtime. Place once at the root of your React tree.
  *
- *   <EazoProvider>
+ *   <EazoProvider appId={process.env.EAZO_APP_ID}>
  *     <App />
  *   </EazoProvider>
  *
- * Renders the shared login UI so `auth.login()` works anywhere in the app
- * without the consumer mounting anything else.
+ * Renders the shared login and share UIs so `auth.login()` and
+ * `share.compose()` work anywhere in the app without extra mounts.
  */
-export function EazoProvider(props: { children: React.ReactNode }): React.ReactElement {
+export function EazoProvider(props: {
+  children: React.ReactNode;
+  /** Eazo app ID. Falls back to env (`EAZO_APP_ID` and framework-prefixed aliases). */
+  appId?: string | null;
+}): React.ReactElement {
+  if (props.appId) setAppId(props.appId);
+
   React.useEffect(() => {
     // Starting the bridge is idempotent; capability access may have already done so.
     getBridge();

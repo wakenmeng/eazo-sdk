@@ -166,17 +166,52 @@ import { notifications } from "@eazo/sdk/server";
 
 export async function POST() {
   const { delivered, publishId } = await notifications.publish({
-    appId: "i_xxx",
     title: "Slow-cooker timer",
     body: "Your stew is ready.",
     data: { recipeId: "stew-42" },           // optional, surfaces in the device tap handler
-    audience: "subscribers",                  // v1 only value
   });
   return Response.json({ delivered, publishId });
 }
 ```
 
-Throws `EazoNotificationPublishError` on platform-level errors (`code` 401 = bad JWT, 403 = appId not owned by your key, 413 = >5,000 subscribers, etc.).
+The appId is a deployment-time constant, not a per-call argument. **Convention: set `EAZO_APP_ID`** (one name, no framework prefix). The recommended way to thread it into the SDK on the client side is through the `<EazoProvider appId={...}>` prop, populated from a Server Component:
+
+```tsx
+// app/layout.tsx (Server Component — Next.js App Router)
+import { EazoProvider } from "@eazo/sdk/react";
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <EazoProvider appId={process.env.EAZO_APP_ID}>
+          {children}
+        </EazoProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+```sh
+# .env
+EAZO_APP_ID=iVW3asOFoOvYr9sl
+```
+
+That's it — one canonical name, no `NEXT_PUBLIC_` alias required.
+
+For frameworks without a Server Component layer (Vite, plain Webpack apps, etc.) call `setAppId(...)` at app startup with whatever value you've sourced (env, runtime config endpoint, etc.):
+
+```ts
+import { setAppId } from "@eazo/sdk";
+setAppId(import.meta.env.VITE_EAZO_APP_ID);
+```
+
+If neither path is convenient, the SDK also reads any of these env vars as a fallback (priority top-down): `EAZO_APP_ID`, `NEXT_PUBLIC_EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`, `VITE_EAZO_APP_ID`, `PUBLIC_EAZO_APP_ID`, `REACT_APP_EAZO_APP_ID`. The framework prefixes are kept for backward compatibility — new projects should prefer the prop or `setAppId()`.
+
+`audience` defaults to `"subscribers"` (v1's only value).
+
+Throws `EazoNotificationPublishError` on platform-level errors (`code` 401 = bad JWT, 403 = appId doesn't belong to your key, 413 = >5,000 subscribers, etc.).
 
 ### Testing
 

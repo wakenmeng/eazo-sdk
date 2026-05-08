@@ -3,7 +3,7 @@ import { ec as EC } from "elliptic";
 
 import { EazoAuthServer } from "./internal/auth-primitive";
 import type { SessionToken, UserInfo } from "./internal/auth-primitive";
-import { DEFAULT_PLATFORM_API_BASE } from "./internal/config";
+import { DEFAULT_PLATFORM_API_BASE, readAppIdFromEnv } from "./internal/config";
 
 import type { User } from "./types";
 
@@ -104,12 +104,7 @@ function base64urlEncode(buf: Buffer | string): string {
   return b.toString("base64").replace(/=+$/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-/**
- * Sign an ES256K JWT in pure JS (we already have `elliptic` for session
- * decryption; pulling in `jose` just for this would double the dep surface).
- * The JWS signature is the raw `r || s` 64-byte concatenation, base64url-
- * encoded — exactly what the platform's `AppDeveloperKeyGuard` expects.
- */
+/** Sign an ES256K JWT (header.payload.signature with raw r||s signature). */
 function signES256K(privateKeyHex: string, payload: object): string {
   const header = { alg: "ES256K", typ: "JWT" };
   const encodedHeader = base64urlEncode(JSON.stringify(header));
@@ -139,9 +134,15 @@ function derivePublicKey(privateKeyHex: string): string {
   return ec.keyFromPrivate(privateKeyHex, "hex").getPublic(true, "hex");
 }
 
+function getDeveloperAppId(): string {
+  const fromEnv = readAppIdFromEnv();
+  if (!fromEnv) {
+    throw new Error("@eazo/sdk/server: EAZO_APP_ID is required for notifications.publish().");
+  }
+  return fromEnv;
+}
+
 export interface NotificationPublishInput {
-  /** Eazo app ID — must belong to the user whose private key signs the JWT. */
-  appId: string;
   /** Title shown in the system push tray. Up to 120 chars. */
   title: string;
   /** Body of the notification. Up to 500 chars. */
@@ -158,27 +159,18 @@ export interface NotificationPublishResult {
 }
 
 /**
- * Server-to-server publishing for app backends. Signs an ES256K JWT with the
- * developer's `EAZO_PRIVATE_KEY` and POSTs to `/api/open/notifications/publish`
- * on the Eazo platform. Subscribers (users with the per-app subscribe bit
- * set) receive an Expo system push.
- *
- * Call this from your serverless route handler at the moment of the event
- * (e.g. inside a Vercel Cron job, or a webhook receiver). The function does
- * not need a long-running backend — a fresh invocation per publish is fine.
- *
- * Throws `EazoNotificationPublishError` on non-zero response codes; the
- * error's `code` is the platform's business code (e.g. 403 for "not your
- * app", 413 for "too many subscribers", 401 for JWT problems).
+ * Server-side publish to subscribers of this app. Signs a JWT with
+ * `EAZO_PRIVATE_KEY` and POSTs to the platform; throws
+ * `EazoNotificationPublishError` on non-zero response codes.
  */
 export const notifications = {
   async publish(input: NotificationPublishInput): Promise<NotificationPublishResult> {
     if (!input || typeof input !== "object") {
       throw new Error("notifications.publish requires an input object");
     }
-    if (!input.appId) throw new Error("notifications.publish: `appId` is required");
     if (!input.title) throw new Error("notifications.publish: `title` is required");
     if (!input.body) throw new Error("notifications.publish: `body` is required");
+    const appId = getDeveloperAppId();
 
     const privateKeyHex = getDeveloperPrivateKey();
     const publicKeyHex = derivePublicKey(privateKeyHex);
@@ -199,7 +191,7 @@ export const notifications = {
         Authorization: `Bearer ${jwt}`,
       },
       body: JSON.stringify({
-        appId: input.appId,
+        appId,
         title: input.title,
         body: input.body,
         data: input.data,
