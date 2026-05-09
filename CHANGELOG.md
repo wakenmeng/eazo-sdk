@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-05-08
+
+Bundles the changes intended for 0.12.0 (never published) with the 0.13 work.
+
+### Added
+- `HelloEnvelope.apiBase` (top-level, optional). Hosts inject the Eazo platform URL they target; the SDK routes its own platform calls through it. Internal — not exposed via `DeviceContext`.
+- `setHostApiBase` private slot in `internal/config.ts`. `getPlatformApiBase()` priority: explicit override → host-injected → env-name list → default.
+- `<EazoProvider appId={...}>` prop. Recommended path on Next.js / Remix: read `process.env.EAZO_APP_ID` from a Server Component, pass via prop. No `NEXT_PUBLIC_*` alias needed.
+- `auth.requestLogout` RPC. Mobile delegates `auth.logout()` to the host instead of clearing local session unilaterally.
+
+### Changed (breaking)
+- **`DeviceContext.backendUrl` removed.** Apps that read `device.backendUrl` (via `useEazo` or `device.getContext()`) get a TypeScript error. The platform URL is now an SDK-internal concern, surfaced only through `getPlatformApiBase()`.
+- **`appId` is configured via `<EazoProvider appId>` or `setAppId()`** rather than `auth.configure({ appId })`. Env-name fallback (`EAZO_APP_ID` plus `NEXT_PUBLIC_EAZO_APP_ID` / `EXPO_PUBLIC_EAZO_APP_ID` / `VITE_EAZO_APP_ID` / `PUBLIC_EAZO_APP_ID` / `REACT_APP_EAZO_APP_ID`) kept as a safety net.
+- `getApiBase` → `getPlatformApiBase`. `DEFAULT_API_BASE` → `DEFAULT_PLATFORM_API_BASE`. Renamed across all capabilities (`auth`, `share`, `storage`, `memory`, `ai`) and `auth-primitive`.
+
+### Removed
+- The duplicated `getApiBase()` helper that lived in `server.ts`; `notifications.publish` now uses the shared `getPlatformApiBase()`.
+
+## [0.11.0] - 2026-04-30
+
+### Added
+- `memory.reportAction` is forwarded to the mobile host as a fire-and-forget side-channel (in addition to the existing `/api/open/gum/action` HTTP POST). Mobile uses this to react to user actions inside an embedded app without polling Gum.
+- `notifications` capability — frontend RPCs (`subscribe`, `unsubscribe`, `isSubscribed`) routed through the host bridge; web fallback resolves `{ subscribed: false }`.
+- `notifications.publish` server helper exported from `@eazo/sdk/server`. Signs an ES256K JWT with `EAZO_PRIVATE_KEY` and POSTs `/api/open/notifications/publish`. Throws `EazoNotificationPublishError` on platform errors.
+
+## [0.10.0] - 2026-04-29
+
+### Removed (breaking)
+- `DeviceContext.safeArea` and the `device.safeArea.changed` event. Apps reach for `env(safe-area-inset-*)` / `100dvh` for native edge-to-edge layout.
+- `useSafeAreaCssVars` hook in `<EazoProvider>`. The `--eazo-safe-area-top` / `--eazo-safe-area-bottom` CSS custom properties are no longer published.
+
+## [0.9.0] - 2026-04-28
+
+### Changed (breaking)
+- **`ready` envelope: `publicKey` → `appId`.** Apps no longer ship the developer ECC public key over the bridge; the host receives the Eazo `appId` and resolves the keypair backend-side. `EazoAuthClientConfig` accepts `appId` instead of `publicKey`.
+
+## [0.8.1] - 2026-04-27
+
+### Removed
+- `share.configure({ downloadUrl })`. The web download CTA's URL is now hard-coded to the platform default; configuration was unused.
+
+## [0.8.0] - 2026-04-26
+
+### Added
+- `memory` capability — Gum memory service client (sessions, messages, contextual memory, user action events). Shared between mobile and web paths.
+
+## [0.7.0] - 2026-04-25
+
+### Added
+- `ai` capability — OpenAI-compatible signature routing through the Eazo platform AI gateway.
+
+## [0.6.0] - 2026-04-24
+
+### Added
+- `storage` capability — presigned S3 upload / download (`storage.upload`, `storage.getCredentials`).
+
 ## [0.5.0] - 2026-04-22
 
 ### Added
