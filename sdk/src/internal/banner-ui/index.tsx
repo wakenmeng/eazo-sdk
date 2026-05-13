@@ -3,34 +3,19 @@
 import * as React from "react";
 
 import { getHost } from "../env";
-import { CloseIcon, EazoLogo } from "./icons";
-import { resolveStoreUrl } from "./store-links";
+import { EazoLogo } from "./icons";
+import { resolveBannerCta, type BannerCta } from "./store-links";
 import {
   BANNER_HEIGHT_DESKTOP,
   BANNER_HEIGHT_MOBILE,
   ensureBannerStylesInjected,
 } from "./styles";
 
-const DISMISS_KEY = "eazo:banner:dismissed";
 const MOBILE_BREAKPOINT_PX = 480;
-
-function readDismissed(): boolean {
-  try {
-    return window.sessionStorage.getItem(DISMISS_KEY) === "1";
-  } catch {
-    // Private mode / disabled storage — treat as not dismissed; the close
-    // button will still hide it for the lifetime of the page.
-    return false;
-  }
-}
-
-function writeDismissed(): void {
-  try {
-    window.sessionStorage.setItem(DISMISS_KEY, "1");
-  } catch {
-    // Ignore: dismissal still works in-memory via React state.
-  }
-}
+// How long to wait after firing the deeplink before assuming "not installed"
+// and redirecting to the store. iOS Safari has no native fallback; if the
+// app opens, the page is backgrounded long before this fires.
+const IOS_FALLBACK_TIMEOUT_MS = 1500;
 
 function currentBannerHeight(): number {
   if (typeof window === "undefined") return BANNER_HEIGHT_DESKTOP;
@@ -42,18 +27,18 @@ function currentBannerHeight(): number {
 /**
  * Top-of-page promo banner that points users to the Eazo mobile app.
  * Mounted by `<EazoProvider>` and rendered only in pure-web environments
- * (not the eazoMobile WebView, not embedded iframes). Dismissal is per-tab.
+ * (not the eazoMobile WebView, not embedded iframes). Persistent — the
+ * banner has no dismiss control; users move on by installing the app.
  */
 export function EazoBrandBanner(): React.ReactElement | null {
   const [visible, setVisible] = React.useState(false);
-  const [storeUrl, setStoreUrl] = React.useState<string>("");
+  const [cta, setCta] = React.useState<BannerCta | null>(null);
 
   React.useEffect(() => {
     if (getHost() !== "web") return;
-    if (readDismissed()) return;
 
     ensureBannerStylesInjected();
-    setStoreUrl(resolveStoreUrl());
+    setCta(resolveBannerCta());
     setVisible(true);
   }, []);
 
@@ -74,11 +59,30 @@ export function EazoBrandBanner(): React.ReactElement | null {
     };
   }, [visible]);
 
-  if (!visible) return null;
+  if (!visible || !cta) return null;
 
-  const dismiss = (): void => {
-    writeDismissed();
-    setVisible(false);
+  const handleCtaClick = (): void => {
+    if (!cta.needsTimeoutFallback) return;
+    // iOS path: the <a> kicks off the `eazo://` navigation. If the app is
+    // installed, the page is backgrounded before the timeout fires. If
+    // not, Safari shows a brief "Cannot Open" toast and we land back here
+    // visible — at which point we redirect to the App Store ourselves.
+    const start = Date.now();
+    let appOpened = false;
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === "hidden") appOpened = true;
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.setTimeout(() => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (
+        !appOpened &&
+        document.visibilityState === "visible" &&
+        Date.now() - start < IOS_FALLBACK_TIMEOUT_MS + 500
+      ) {
+        window.location.href = cta.storeUrl;
+      }
+    }, IOS_FALLBACK_TIMEOUT_MS);
   };
 
   return (
@@ -91,20 +95,12 @@ export function EazoBrandBanner(): React.ReactElement | null {
       </span>
       <a
         className="eazo-banner-cta"
-        href={storeUrl}
-        target="_blank"
+        href={cta.href}
         rel="noreferrer noopener"
+        onClick={handleCtaClick}
       >
-        Get the app
+        Open in app
       </a>
-      <button
-        type="button"
-        className="eazo-banner-close"
-        aria-label="Dismiss banner"
-        onClick={dismiss}
-      >
-        <CloseIcon size={16} />
-      </button>
     </div>
   );
 }

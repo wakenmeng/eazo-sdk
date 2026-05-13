@@ -65,26 +65,6 @@ export const BANNER_UI_CSS = `
   box-shadow: 0 8px 18px rgba(212, 97, 74, 0.36);
 }
 
-.eazo-banner-close {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(17, 19, 15, 0.52);
-  cursor: pointer;
-  padding: 0;
-  transition: color 120ms ease, background 120ms ease;
-}
-.eazo-banner-close:hover {
-  color: #11130f;
-  background: rgba(17, 19, 15, 0.06);
-}
-
 @media (max-width: 480px) {
   .eazo-banner-root {
     height: ${BANNER_HEIGHT_MOBILE}px;
