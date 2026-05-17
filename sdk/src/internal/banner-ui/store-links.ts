@@ -1,3 +1,5 @@
+import { getAppId } from "../config";
+
 // TODO(banner): replace placeholders once the iOS App Store ID and Android
 // package name are confirmed by the mobile team. Until then, all platforms
 // fall back to the marketing site so users never hit a 404.
@@ -44,34 +46,40 @@ export interface BannerCta {
 /**
  * Per-platform plan for the banner CTA. Uses Eazo Mobile's registered
  * custom scheme `eazo://` (declared in `eazo-mobile/app.json#scheme`),
- * which doesn't require any path-specific AASA / App Links entry:
+ * which doesn't require any path-specific AASA / App Links entry.
  *
- * - **iOS**: `eazo://`. If the app is installed Safari opens it and the
- *   page is backgrounded; otherwise Safari shows a "Cannot open" toast
- *   and the page stays visible — the caller's JS timeout then navigates
- *   to the App Store.
- * - **Android**: Chrome `intent://` URL that wraps the same scheme and
- *   embeds `browser_fallback_url`. Chrome opens the app when installed
- *   and navigates to the fallback URL natively when not. No JS timeout
- *   needed.
+ * When an appId is configured (the normal case under the `<EazoProvider>`
+ * convention), the URL carries `app/<appId>` as its path so the mobile
+ * shell knows which app to push — `eazo-mobile/+native-intent.tsx`
+ * whitelists this prefix to skip expo-router's default reset, and
+ * `RootIntentObserver` then issues `router.push('/app/<appId>')` on top
+ * of the existing stack. A missing appId falls back to bare `eazo://`,
+ * which just foregrounds the app on its current screen.
+ *
+ * - **iOS**: `eazo://app/<appId>`. If the app is installed Safari opens
+ *   it and the page is backgrounded; otherwise Safari shows a "Cannot
+ *   open" toast and the page stays visible — the caller's JS timeout
+ *   then navigates to the App Store.
+ * - **Android**: Chrome `intent://app/<appId>#Intent;scheme=eazo;…;end`.
+ *   Chrome opens the app when installed (launch URL becomes
+ *   `eazo://app/<appId>`) and navigates to `browser_fallback_url`
+ *   natively when not. No JS timeout needed.
  * - **Desktop**: just the marketing site; no app-open attempt.
- *
- * The previous design tried `https://eazo.ai/` as a Universal Link, but
- * eazo.ai's AASA / App Links autoVerify only registers `/p/*`, so the
- * root URL was treated as a regular web page on both platforms.
  */
 export function resolveBannerCta(): BannerCta {
   if (typeof navigator === "undefined") {
     return { href: MARKETING_URL, storeUrl: MARKETING_URL, needsTimeoutFallback: false };
   }
   const platform = detectPlatform(navigator.userAgent);
+  const appId = getAppId();
+  const path = appId ? `app/${encodeURIComponent(appId)}` : "";
   if (platform === "ios") {
-    return { href: "eazo://", storeUrl: APP_STORE_URL, needsTimeoutFallback: true };
+    return { href: `eazo://${path}`, storeUrl: APP_STORE_URL, needsTimeoutFallback: true };
   }
   if (platform === "android") {
     const fallback = encodeURIComponent(PLAY_STORE_URL);
     return {
-      href: `intent://#Intent;scheme=eazo;package=${ANDROID_PACKAGE};S.browser_fallback_url=${fallback};end`,
+      href: `intent://${path}#Intent;scheme=eazo;package=${ANDROID_PACKAGE};S.browser_fallback_url=${fallback};end`,
       storeUrl: PLAY_STORE_URL,
       needsTimeoutFallback: false,
     };

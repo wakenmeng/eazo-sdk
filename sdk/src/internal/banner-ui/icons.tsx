@@ -1,6 +1,111 @@
 import * as React from "react";
 
 type LogoProps = { width?: number; height?: number };
+type IconProps = { size?: number };
+
+export type CapabilityKey = "push" | "share" | "ai" | "auth";
+
+export interface CapabilityDescriptor {
+  key: CapabilityKey;
+  label: string;
+}
+
+export const CAPABILITIES: readonly CapabilityDescriptor[] = [
+  { key: "push", label: "Push" },
+  { key: "share", label: "Native share" },
+  { key: "ai", label: "AI gateway" },
+  { key: "auth", label: "One-tap sign-in" },
+] as const;
+
+export function CapIcon({
+  k,
+  size = 14,
+}: { k: CapabilityKey; size?: number }): React.ReactElement | null {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.6,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (k === "push") {
+    return (
+      <svg {...props}>
+        <path d="M6 8a6 6 0 0 1 12 0v4l1.6 2.4A1 1 0 0 1 18.77 16H5.23a1 1 0 0 1-.83-1.6L6 12V8Z" />
+        <path d="M10 19a2 2 0 0 0 4 0" />
+      </svg>
+    );
+  }
+  if (k === "share") {
+    return (
+      <svg {...props}>
+        <circle cx="6" cy="12" r="2.2" />
+        <circle cx="17" cy="6" r="2.2" />
+        <circle cx="17" cy="18" r="2.2" />
+        <path d="m8 11 7-4M8 13l7 4" />
+      </svg>
+    );
+  }
+  if (k === "ai") {
+    return (
+      <svg {...props}>
+        <path d="M12 3.5 13.4 8 18 9.4 13.4 10.8 12 15.3 10.6 10.8 6 9.4 10.6 8 12 3.5Z" />
+        <path d="M18 14.5 18.7 16.7 20.9 17.4 18.7 18.1 18 20.3 17.3 18.1 15.1 17.4 17.3 16.7 18 14.5Z" />
+      </svg>
+    );
+  }
+  if (k === "auth") {
+    return (
+      <svg {...props}>
+        <rect x="5" y="10" width="14" height="10" rx="2" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        <circle cx="12" cy="15" r="1.2" />
+      </svg>
+    );
+  }
+  return null;
+}
+
+export function ArrowRightIcon({ size = 12 }: IconProps): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+export function HeartIcon({ size = 14 }: IconProps): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24"
+      fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <path d="M12 20.5s-7-4.4-7-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7 3.5c0 5.6-7 10-7 10Z" />
+    </svg>
+  );
+}
+
+export function ChatIcon({ size = 14 }: IconProps): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.5 8.5 0 1 1-3.6-6.9L21 4l-1 3.5A8.4 8.4 0 0 1 21 11.5Z" />
+      <path d="M8 11h8M8 14h5" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ size = 14 }: IconProps): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 export function EazoLogo({ width = 80, height = 22 }: LogoProps): React.ReactElement {
   return (

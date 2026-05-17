@@ -1,70 +1,479 @@
 const STYLE_ID = "eazo-sdk-banner-ui";
 
 export const BANNER_HEIGHT_DESKTOP = 52;
-export const BANNER_HEIGHT_MOBILE = 64;
+export const BANNER_HEIGHT_MOBILE = 56;
+export const BOTTOM_HEIGHT_DESKTOP = 60;
+export const BOTTOM_HEIGHT_MOBILE = 60;
+
+const TOKENS = `
+  --eazo-cream: #f1ebe0;
+  --eazo-paper: #faf6ee;
+  --eazo-ink: #11130f;
+  --eazo-ink-soft: rgba(17,19,15,0.62);
+  --eazo-ink-faint: rgba(17,19,15,0.32);
+  --eazo-hair: rgba(17,19,15,0.10);
+  --eazo-coral: #d4614a;
+  --eazo-coral-gradient: linear-gradient(180deg, #F47A42 0%, #EE5C2A 100%);
+  --eazo-glow: rgba(212,97,74,0.36);
+  --eazo-sans: "Inter", "Helvetica Neue", system-ui, sans-serif;
+  --eazo-serif: "Source Serif 4", "GT Sectra", "Tiempos", Georgia, serif;
+  --eazo-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+`;
 
 export const BANNER_UI_CSS = `
-.eazo-banner-root {
+/* The whole handoff UI lives inside ONE fixed-positioned container that
+ * fills the viewport and flex-columns its three children: top banner +
+ * overlay (which holds the modal) + bottom banner. This replaces the
+ * earlier design where each piece was independently position:fixed
+ * with hand-tuned top:52px / bottom:60px insets — that scheme broke
+ * any time an ancestor of the SDK mount established a containing block
+ * (transform / filter / backdrop-filter / contain on <body>, a wrapper,
+ * etc.), at which point position:fixed becomes relative to that
+ * ancestor and the math goes wrong. Flex layout makes the overlay
+ * genuinely between the banners by structure, not by pixel math.
+ *
+ * The root is pointer-events:none so the user's page underneath stays
+ * interactive in transparent regions (there shouldn't be any when the
+ * overlay's modal is up, but it's the right default). Each visual child
+ * (banners + overlay dim) opts back in with pointer-events:auto. */
+.eazo-handoff-root {
+  ${TOKENS}
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2147483550;
+  inset: 0;
+  z-index: 2147483540;
+  display: flex;
+  flex-direction: column;
+  /* justify-content:space-between keeps the bottom banner pinned even
+   * when the user dismisses the modal (the overlay child unmounts) —
+   * without it the flex-column would collapse the bottom banner up to
+   * sit right under the top one. */
+  justify-content: space-between;
+  color: var(--eazo-ink);
+  font-family: var(--eazo-sans);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.eazo-handoff-root *, .eazo-handoff-root *::before, .eazo-handoff-root *::after {
+  box-sizing: border-box;
+}
+
+@keyframes eazo-handoff-slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes eazo-handoff-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes eazo-handoff-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes eazo-handoff-orbit-rev { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+@keyframes eazo-handoff-glow { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes eazo-handoff-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes eazo-handoff-pop-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ============ TOP BANNER ============
+ *
+ * Slim three-piece strip: brand mark, single-line copy, CTA. The
+ * underlying app's content sits below this. Non-dismissible.
+ */
+.eazo-banner-root {
+  /* Flex child of .eazo-handoff-root — naturally pinned to the top of
+   * the viewport-filling container. No position:fixed needed. */
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
   height: ${BANNER_HEIGHT_DESKTOP}px;
   padding: 0 14px 0 18px;
-  background: #f1ebe0;
-  color: #11130f;
-  font-family: inherit;
-  box-sizing: border-box;
-  animation: eazo-banner-slide-down 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  background: var(--eazo-cream);
+  border-bottom: 1px solid var(--eazo-hair);
+  pointer-events: auto;
+  animation: eazo-handoff-slide-down 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-@keyframes eazo-banner-slide-down {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
 .eazo-banner-brand {
-  display: inline-flex;
-  align-items: center;
+  display: inline-flex; align-items: center;
   flex-shrink: 0;
-  color: #11130f;
+  color: var(--eazo-ink);
 }
-
 .eazo-banner-copy {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(17, 19, 15, 0.62);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1; min-width: 0;
+  font-size: 14px; font-weight: 500;
+  color: var(--eazo-ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-
 .eazo-banner-cta {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 12px;
-  background: #d4614a;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 14px; border-radius: 10px;
+  background: var(--eazo-coral-gradient); color: #fff;
+  font-size: 12px; font-weight: 600; border: 0; cursor: pointer;
   text-decoration: none;
-  cursor: pointer;
+  box-shadow: 0 10px 22px var(--eazo-glow);
   transition: filter 160ms ease, box-shadow 160ms ease;
 }
-.eazo-banner-cta:hover {
-  filter: brightness(1.06);
-  box-shadow: 0 8px 18px rgba(212, 97, 74, 0.36);
+.eazo-banner-cta:hover { filter: brightness(1.06); }
+
+/* CTA wrapper anchors the hover/focus popover. position:relative is the
+ * coordinate origin for the absolutely-positioned popover below. */
+.eazo-banner-cta-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
+/* Hover popover holding the page-URL QR. Matches the v5-stagelight
+ * design (project/v5-stagelight.jsx:59-85). The CTA's right edge anchors
+ * the right edge of the popover so it never spills off the viewport on
+ * a banner where the CTA is hugged to the right padding. */
+.eazo-banner-cta-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 2147483560;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  min-width: 168px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--eazo-hair);
+  border-radius: 14px;
+  box-shadow:
+    0 24px 50px -20px rgba(17,19,15,0.22),
+    0 0 0 1px rgba(17,19,15,0.03);
+  animation: eazo-handoff-fade-in 140ms ease-out;
+}
+/* Triangular tail pointing back up at the CTA. Rotated square so it
+ * inherits the card's border + background without an extra SVG. */
+.eazo-banner-cta-popover-arrow {
+  position: absolute;
+  top: -7px; right: 24px;
+  width: 12px; height: 12px;
+  background: #fff;
+  border-top: 1px solid var(--eazo-hair);
+  border-left: 1px solid var(--eazo-hair);
+  transform: rotate(45deg);
+}
+.eazo-banner-cta-popover-qr {
+  padding: 4px;
+  background: #fff;
+  line-height: 0;
+}
+.eazo-banner-cta-popover-caption {
+  font-family: var(--eazo-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: var(--eazo-ink-soft);
+  text-align: center;
+}
+
+/* ============ OVERLAY (backdrop + spotlight + modal) ============
+ *
+ * The flex-middle of .eazo-handoff-root. Takes whatever vertical space
+ * the top and bottom banners don't claim — i.e. it IS the inter-banner
+ * area by structure, not by pixel math. overflow:hidden clips any
+ * oversized modal at this seam; the modal's own max-height:100% plus
+ * the overlay's flex centering keeps it inside.
+ */
+.eazo-handoff-overlay {
+  flex: 1;
+  min-height: 0;  /* allow the flex item to shrink below content size */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+  pointer-events: auto;
+  animation: eazo-handoff-fade-in 320ms ease-out;
+}
+.eazo-handoff-overlay-dim {
+  position: absolute; inset: 0;
+  background: rgba(241,235,224,0.78);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.eazo-handoff-overlay-spot {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(212,97,74,0.22) 0%, rgba(212,97,74,0.06) 30%, transparent 58%);
+  pointer-events: none;
+}
+
+.eazo-modal {
+  /* Natural flex centering by the overlay parent — no absolute
+   * positioning. This keeps the modal inside the overlay's banner-
+   * constrained box even when its content is tall, so it never bleeds
+   * into the top or bottom banner area. If the modal is taller than the
+   * overlay, the inner content scrolls. */
+  position: relative;
+  width: min(540px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 32px 32px 28px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--eazo-hair);
+  border-radius: 24px;
+  color: var(--eazo-ink);
+  box-shadow:
+    0 60px 100px -40px rgba(17,19,15,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.7),
+    0 0 60px var(--eazo-glow);
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  animation: eazo-handoff-pop-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Close button — sits in the modal's top-right corner. The top + bottom
+ * Eazo banners stay visible after the user dismisses the modal; only
+ * this center "strong CTA" goes away (per-tab via sessionStorage). */
+.eazo-modal-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; padding: 0;
+  border-radius: 999px;
+  background: rgba(17,19,15,0.04);
+  color: var(--eazo-ink-soft);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.eazo-modal-close:hover {
+  background: rgba(17,19,15,0.08);
+  color: var(--eazo-ink);
+}
+.eazo-modal-close:focus-visible {
+  outline: 2px solid var(--eazo-coral);
+  outline-offset: 2px;
+}
+
+/* ============ ORBITING CAPABILITIES + APP MONOLITH ============
+ *
+ * Geometry runs in a 280-unit coordinate space (matches the V5 design
+ * canvas). The rings SVG uses a viewBox so its content scales to whatever
+ * pixel size the .eazo-orbit container is in CSS (280 desktop, 220
+ * mobile). The capability nodes position via percentage left/top on
+ * the rotating track, then use negative margins to center on that point
+ * — margins do not fight the track rotate animation the way a
+ * transform: translate(-50%, -50%) would.
+ */
+.eazo-orbit {
+  position: relative;
+  width: 280px; height: 280px;
+  display: grid; place-items: center;
+}
+.eazo-orbit-rings {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  opacity: 0.95;
+}
+.eazo-orbit-track {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  animation: eazo-handoff-orbit 30s linear infinite;
+}
+.eazo-orbit-node {
+  position: absolute;
+  width: 36px; height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 10px;
+  background: #fff; border: 1px solid var(--eazo-hair);
+  display: grid; place-items: center;
+  box-shadow: 0 10px 22px -10px rgba(17,19,15,0.15);
+  animation: eazo-handoff-orbit-rev 30s linear infinite;
+  color: var(--eazo-coral);
+}
+.eazo-monolith {
+  width: 96px; height: 96px; border-radius: 22px;
+  /* Default fallback background — visible behind emoji icons and the
+   * typographic initials fallback. URL icons render as a child <img>
+   * that covers this completely. Eazo coral gradient (same as primary
+   * CTAs) so the empty state reads as a clear Eazo-brand placeholder. */
+  background: var(--eazo-coral-gradient);
+  display: grid; place-items: center;
+  position: relative;
+  color: #ffffff;
+  font-family: var(--eazo-serif); font-weight: 500;
+  font-size: 42px; letter-spacing: -0.02em;
+  box-shadow:
+    0 30px 60px -20px var(--eazo-glow),
+    inset 0 1px 0 rgba(255,255,255,0.30),
+    0 0 0 1px rgba(255,255,255,0.14);
+  overflow: hidden;
+}
+.eazo-monolith img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+.eazo-modal-eyebrow {
+  font-family: var(--eazo-mono); font-size: 10px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--eazo-ink-faint);
+  text-align: center;
+}
+.eazo-modal-title {
+  margin: 0; font-family: var(--eazo-serif); font-weight: 500;
+  font-size: 32px; line-height: 1.15; letter-spacing: -0.02em;
+  text-align: center; max-width: 360px;
+  /* Clamp at 2 lines so an unusually long app name doesn't blow up the
+   * modal height. Ellipsis takes over for the overflow. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.eazo-modal-sub {
+  margin: 0; font-size: 13px; line-height: 1.5;
+  color: var(--eazo-ink-soft);
+  text-align: center; max-width: 360px;
+  /* Same idea — long taglines clamp to 3 lines to keep the QR + CTA
+   * visible without scrolling. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Skeleton blocks shown while public app info is in flight. The modal
+ * frame appears immediately so the user sees Eazo's commitment to the
+ * handoff; the name / tagline swap in once the fetch resolves. */
+.eazo-skel {
+  display: inline-block;
+  vertical-align: middle;
+  background: linear-gradient(90deg,
+    rgba(17,19,15,0.05) 0%,
+    rgba(17,19,15,0.12) 50%,
+    rgba(17,19,15,0.05) 100%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: eazo-skel-shimmer 1.4s linear infinite;
+}
+.eazo-skel-title { width: 60%; height: 36px; }
+.eazo-skel-sub-1 { width: 80%; height: 13px; margin-top: 8px; }
+.eazo-skel-sub-2 { width: 55%; height: 13px; margin-top: 6px; }
+.eazo-skel-stat  { width: 28px; height: 11px; border-radius: 4px; }
+@keyframes eazo-skel-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Monolith-tuned shimmer — sweeps a brighter band over the dark navy
+ * gradient. Used while public app info is still loading, and as the
+ * placeholder behind an <img> until it decodes. */
+.eazo-monolith-skel {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.00) 0%,
+    rgba(255,255,255,0.18) 50%,
+    rgba(255,255,255,0.00) 100%);
+  background-size: 200% 100%;
+  animation: eazo-skel-shimmer 1.4s linear infinite;
+  pointer-events: none;
+}
+.eazo-monolith-img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.eazo-monolith-img.is-loaded { opacity: 1; }
+
+/* ============ QR + CTA ROW ============ */
+.eazo-cta-row {
+  width: 100%; display: flex; gap: 12px; align-items: stretch; margin-top: 6px;
+}
+.eazo-qr-tile {
+  padding: 8px; border-radius: 10px;
+  background: #fff; border: 1px solid var(--eazo-hair);
+  display: grid; place-items: center;
+}
+.eazo-cta-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+}
+.eazo-cta-headline {
+  font-size: 12px; font-weight: 600;
+}
+.eazo-cta-fine {
+  font-size: 10px; color: var(--eazo-ink-faint); margin-top: 4px;
+  font-family: var(--eazo-mono); letter-spacing: 0.04em; line-height: 1.5;
+}
+.eazo-cta-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; border-radius: 10px;
+  background: var(--eazo-coral-gradient); color: #fff;
+  font-size: 13px; font-weight: 600; border: 0; cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 14px 26px var(--eazo-glow);
+  transition: filter 160ms ease;
+}
+.eazo-cta-primary:hover { filter: brightness(1.06); }
+
+/* ============ BOTTOM BANNER ============
+ *
+ * Social-proof rail for the host app on the Eazo platform. Each cell is
+ * a tight icon + value + label group; cells flow left, the small
+ * "Powered by eazo.ai" text link tucks to the right. No CTA lives here —
+ * the app-handoff prompts are owned by the top banner and the center
+ * modal.
+ */
+.eazo-bottom-root {
+  /* Flex child of .eazo-handoff-root — naturally pinned to the bottom of
+   * the viewport-filling container. No position:fixed needed. */
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  height: ${BOTTOM_HEIGHT_DESKTOP}px;
+  padding: 0 22px;
+  background: #fff;
+  border-top: 1px solid var(--eazo-hair);
+  pointer-events: auto;
+  animation: eazo-handoff-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.eazo-bottom-stats {
+  display: inline-flex; align-items: center; gap: 20px;
+  min-width: 0; color: var(--eazo-ink);
+}
+.eazo-bottom-stat {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--eazo-sans);
+  flex-shrink: 0;
+}
+.eazo-bottom-stat-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--eazo-coral);
+}
+/* Heart and star are filled glyphs in coral; the line icons (chat,
+ * eye, etc.) ride on currentColor and pick up the slot's ink shade. */
+.eazo-bottom-stat-icon.is-line { color: var(--eazo-ink); }
+.eazo-bottom-stat-value { font-size: 13px; font-weight: 600; }
+.eazo-bottom-stat-label { font-size: 11px; color: var(--eazo-ink-faint); }
+.eazo-bottom-skel {
+  display: inline-block; vertical-align: middle;
+  width: 22px; height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg,
+    rgba(17,19,15,0.05) 0%,
+    rgba(17,19,15,0.12) 50%,
+    rgba(17,19,15,0.05) 100%);
+  background-size: 200% 100%;
+  animation: eazo-skel-shimmer 1.4s linear infinite;
+}
+.eazo-bottom-site {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--eazo-ink-soft);
+  text-decoration: none;
+  font-family: var(--eazo-mono); font-size: 12px; letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color 140ms ease;
+}
+.eazo-bottom-site:hover { color: var(--eazo-ink); }
+.eazo-bottom-site b { color: var(--eazo-ink); font-weight: 600; }
+
+/* ============ MOBILE TWEAKS (≤480px) ============ */
 @media (max-width: 480px) {
   .eazo-banner-root {
     height: ${BANNER_HEIGHT_MOBILE}px;
@@ -72,24 +481,72 @@ export const BANNER_UI_CSS = `
     gap: 10px;
   }
   .eazo-banner-copy {
-    font-size: 12px;
-    line-height: 1.25;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    font-size: 12px; line-height: 1.25; white-space: normal;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
-  .eazo-banner-cta {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 12px;
+  .eazo-banner-cta { height: 28px; padding: 0 10px; font-size: 11px; border-radius: 8px; }
+  /* Hover doesn't resolve reliably on touch — the CTA still works as a
+   * plain link, no popover needed. Belt-and-suspenders to the JS check
+   * (the popover render is also gated on the 'open' state, which never
+   * flips without mouseenter / focus). */
+  .eazo-banner-cta-popover { display: none; }
+
+  .eazo-modal {
+    width: calc(100vw - 32px);
+    padding: 24px 20px 20px;
+    border-radius: 20px;
+    gap: 14px;
   }
+  .eazo-orbit { width: 220px; height: 220px; }
+  .eazo-monolith {
+    width: 76px; height: 76px; border-radius: 18px;
+    font-size: 32px;
+  }
+  .eazo-orbit-node {
+    width: 28px; height: 28px; border-radius: 8px;
+    margin: -14px 0 0 -14px;
+  }
+  .eazo-modal-title { font-size: 26px; }
+  .eazo-modal-sub { font-size: 12px; }
+
+  /* Mobile: the user is already on a phone — no point showing them a QR
+   * to scan with their phone, and the "Scan to open" headline + fine
+   * print only made sense paired with the QR. Collapse to the primary
+   * CTA alone. */
+  .eazo-qr-tile { display: none; }
+  .eazo-cta-row { flex-direction: column; gap: 10px; }
+  .eazo-cta-primary { height: 44px; width: 100%; font-size: 14px; border-radius: 12px; }
+  .eazo-cta-headline { display: none; }
+  .eazo-cta-fine { display: none; }
+
+  .eazo-bottom-root {
+    height: ${BOTTOM_HEIGHT_MOBILE}px;
+    padding: 0 14px;
+    gap: 10px;
+  }
+  /* Narrow viewport: keep the stat icons + values but drop the small
+   * "likes / comments / views" labels — they crowd the 4-px gaps and
+   * are obvious from the icon alone. Tighten inter-stat spacing too. */
+  .eazo-bottom-stats { gap: 14px; }
+  .eazo-bottom-stat-label { display: none; }
+  .eazo-bottom-stat-value { font-size: 12px; }
+  .eazo-bottom-site { font-size: 11px; }
 }
 `;
 
 export function ensureBannerStylesInjected(): void {
   if (typeof document === "undefined") return;
-  if (document.getElementById(STYLE_ID)) return;
+  // Always overwrite the textContent rather than early-return on
+  // existing tag presence. Next.js Fast Refresh re-imports this module
+  // with updated `BANNER_UI_CSS`, but the previously-injected <style>
+  // tag survives the React tree's hot reload — so an early-return left
+  // the page running stale CSS until a hard refresh. Overwriting is
+  // O(short string) and idempotent.
+  const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  if (existing) {
+    if (existing.textContent !== BANNER_UI_CSS) existing.textContent = BANNER_UI_CSS;
+    return;
+  }
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.setAttribute("data-eazo-sdk", "banner-ui");
