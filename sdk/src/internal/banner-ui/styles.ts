@@ -2,8 +2,12 @@ const STYLE_ID = "eazo-sdk-banner-ui";
 
 export const BANNER_HEIGHT_DESKTOP = 52;
 export const BANNER_HEIGHT_MOBILE = 56;
-export const BOTTOM_HEIGHT_DESKTOP = 60;
-export const BOTTOM_HEIGHT_MOBILE = 60;
+/* Sized so the V5 / M5 bottom banner fits a 44px coral pill plus the
+ * design's 14 / 22-px breathing pad. Bumping these here also bumps the
+ * `<html>` padding-bottom the SDK reserves (see banner-ui/index.tsx),
+ * so the host page never tucks under the banner. */
+export const BOTTOM_HEIGHT_DESKTOP = 72;
+export const BOTTOM_HEIGHT_MOBILE = 78;
 
 const TOKENS = `
   --eazo-cream: #f1ebe0;
@@ -415,11 +419,13 @@ export const BANNER_UI_CSS = `
 
 /* ============ BOTTOM BANNER ============
  *
- * Social-proof rail for the host app on the Eazo platform. Each cell is
- * a tight icon + value + label group; cells flow left, the small
- * "Powered by eazo.ai" text link tucks to the right. No CTA lives here —
- * the app-handoff prompts are owned by the top banner and the center
- * modal.
+ * Per V5 / M5 design: two prominent stats on the left (heart + chat,
+ * each rendered as a tinted icon-tile with a stacked value-over-label
+ * column) separated by a thin hair-divider, and a coral "Remix" pill
+ * on the right that reuses the top-banner CTA handoff. A small
+ * "eazo.ai ↗" mark sits to the left of the pill on desktop only —
+ * on phone widths (≤480px) it drops out so the Remix pill keeps its
+ * thumb-zone weight.
  */
 .eazo-bottom-root {
   /* Flex child of .eazo-handoff-root — naturally pinned to the bottom of
@@ -428,33 +434,55 @@ export const BANNER_UI_CSS = `
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px;
   height: ${BOTTOM_HEIGHT_DESKTOP}px;
-  padding: 0 22px;
+  padding: 0 22px 0 26px;
   background: #fff;
   border-top: 1px solid var(--eazo-hair);
   pointer-events: auto;
   animation: eazo-handoff-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .eazo-bottom-stats {
-  display: inline-flex; align-items: center; gap: 20px;
+  display: inline-flex; align-items: center; gap: 22px;
   min-width: 0; color: var(--eazo-ink);
 }
 .eazo-bottom-stat {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 9px;
   font-family: var(--eazo-sans);
   flex-shrink: 0;
 }
+/* Tinted square tile that frames each stat icon — coral-on-cream for
+ * filled glyphs (heart), neutral-on-cream for line glyphs (chat). */
 .eazo-bottom-stat-icon {
   display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(212,97,74,0.10);
   color: var(--eazo-coral);
+  flex-shrink: 0;
 }
-/* Heart and star are filled glyphs in coral; the line icons (chat,
- * eye, etc.) ride on currentColor and pick up the slot's ink shade. */
-.eazo-bottom-stat-icon.is-line { color: var(--eazo-ink); }
-.eazo-bottom-stat-value { font-size: 13px; font-weight: 600; }
-.eazo-bottom-stat-label { font-size: 11px; color: var(--eazo-ink-faint); }
+.eazo-bottom-stat-icon.is-line {
+  background: rgba(17,19,15,0.05);
+  color: var(--eazo-ink);
+}
+.eazo-bottom-stat-text {
+  display: inline-flex; flex-direction: column; line-height: 1.05;
+}
+.eazo-bottom-stat-value {
+  font-family: var(--eazo-sans);
+  font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+}
+.eazo-bottom-stat-label {
+  font-family: var(--eazo-sans);
+  font-size: 11px; font-weight: 500;
+  color: var(--eazo-ink-faint);
+  margin-top: 1px;
+}
+.eazo-bottom-stat-divider {
+  width: 1px; height: 28px;
+  background: var(--eazo-hair);
+  flex-shrink: 0;
+}
 .eazo-bottom-skel {
   display: inline-block; vertical-align: middle;
-  width: 22px; height: 12px; border-radius: 4px;
+  width: 32px; height: 18px; border-radius: 4px;
   background: linear-gradient(90deg,
     rgba(17,19,15,0.05) 0%,
     rgba(17,19,15,0.12) 50%,
@@ -462,16 +490,48 @@ export const BANNER_UI_CSS = `
   background-size: 200% 100%;
   animation: eazo-skel-shimmer 1.4s linear infinite;
 }
+
+.eazo-bottom-actions {
+  display: inline-flex; align-items: center; gap: 14px;
+  flex-shrink: 0;
+}
 .eazo-bottom-site {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
   color: var(--eazo-ink-soft);
   text-decoration: none;
-  font-family: var(--eazo-mono); font-size: 12px; letter-spacing: 0.02em;
+  font-family: var(--eazo-sans); font-size: 12px; font-weight: 500;
   white-space: nowrap;
   transition: color 140ms ease;
 }
 .eazo-bottom-site:hover { color: var(--eazo-ink); }
 .eazo-bottom-site b { color: var(--eazo-ink); font-weight: 600; }
+
+/* Primary CTA on the bottom banner. Renders as <a> so it picks up the
+ * same iOS-timeout fallback handler as the top-banner CTA via the
+ * shared bindCtaClick — keeps the Remix tap on the same install /
+ * deeplink path as the rest of the handoff UX. */
+.eazo-bottom-remix {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  height: 44px; padding: 0 20px 0 18px;
+  border: 0; cursor: pointer;
+  border-radius: 999px;
+  background: var(--eazo-coral-gradient); color: #fff;
+  font-family: var(--eazo-sans);
+  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
+  white-space: nowrap;
+  box-shadow:
+    0 12px 24px var(--eazo-glow),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  text-decoration: none;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.eazo-bottom-remix:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 28px var(--eazo-glow),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.eazo-bottom-remix:active { transform: translateY(0); }
 
 /* ============ MOBILE TWEAKS (≤480px) ============ */
 @media (max-width: 480px) {
@@ -521,16 +581,32 @@ export const BANNER_UI_CSS = `
 
   .eazo-bottom-root {
     height: ${BOTTOM_HEIGHT_MOBILE}px;
-    padding: 0 14px;
-    gap: 10px;
+    padding: 0 16px 0 20px;
+    gap: 12px;
   }
-  /* Narrow viewport: keep the stat icons + values but drop the small
-   * "likes / comments / views" labels — they crowd the 4-px gaps and
-   * are obvious from the icon alone. Tighten inter-stat spacing too. */
-  .eazo-bottom-stats { gap: 14px; }
-  .eazo-bottom-stat-label { display: none; }
-  .eazo-bottom-stat-value { font-size: 12px; }
-  .eazo-bottom-site { font-size: 11px; }
+  /* Tighter cells per the M5 (390px) spec: smaller icon tile, smaller
+   * value, smaller divider. Labels stay — they're a key part of the
+   * visual rhythm in M5. */
+  .eazo-bottom-stats { gap: 12px; }
+  .eazo-bottom-stat { gap: 7px; }
+  .eazo-bottom-stat-icon { width: 26px; height: 26px; border-radius: 7px; }
+  .eazo-bottom-stat-value { font-size: 14px; }
+  .eazo-bottom-stat-label { font-size: 10px; }
+  .eazo-bottom-stat-divider { height: 24px; }
+  .eazo-bottom-skel { width: 28px; height: 15px; }
+  /* M5 drops the secondary eazo.ai mark on phone widths so the Remix
+   * pill keeps unambiguous thumb-zone weight. */
+  .eazo-bottom-site { display: none; }
+  .eazo-bottom-remix {
+    height: 44px; padding: 0 18px 0 16px;
+    gap: 8px; font-size: 13px;
+    box-shadow:
+      0 10px 22px var(--eazo-glow),
+      inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  /* Drop the trailing "this app" wording on phone widths — the icon
+   * plus the verb is already unambiguous and the pill stays compact. */
+  .eazo-bottom-remix-suffix { display: none; }
 }
 `;
 

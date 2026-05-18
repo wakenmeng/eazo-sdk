@@ -78,6 +78,22 @@ export function ArrowRightIcon({ size = 12 }: IconProps): React.ReactElement {
   );
 }
 
+/* Branch-with-pull glyph used on the bottom-banner Remix CTA. Two arrow
+ * fragments (top-right out, bottom-left in) read as "fork this and pull
+ * it back", which is the visual contract the design system uses for the
+ * remix action across V5 / M5. */
+export function RemixIcon({ size = 16 }: IconProps): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 3h5v5" />
+      <path d="M21 3 13 11" />
+      <path d="M3 21v-5a4 4 0 0 1 4-4h6" />
+      <path d="M9 16l-3-4 3-4" />
+    </svg>
+  );
+}
+
 export function HeartIcon({ size = 14 }: IconProps): React.ReactElement {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24"

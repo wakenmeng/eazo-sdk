@@ -11,6 +11,7 @@ import {
   ChatIcon,
   EazoLogo,
   HeartIcon,
+  RemixIcon,
 } from "./icons";
 import { QrSvg } from "./qr";
 import { fetchPublicAppInfo, type PublicAppInfo } from "./app-info";
@@ -194,7 +195,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
           onDismiss={dismissModal}
         />
       )}
-      <BottomBanner info={info} loading={loading} />
+      <BottomBanner info={info} loading={loading} cta={cta} />
     </div>
   );
 }
@@ -578,6 +579,7 @@ function Monolith({ initials, iconUrl, loading }: MonolithProps): React.ReactEle
 interface BottomBannerProps {
   info: PublicAppInfo | null;
   loading: boolean;
+  cta: BannerCta;
 }
 
 interface Stat {
@@ -590,7 +592,11 @@ interface Stat {
   label: string;
 }
 
-function BottomBanner({ info, loading }: BottomBannerProps): React.ReactElement {
+function BottomBanner({
+  info,
+  loading,
+  cta,
+}: BottomBannerProps): React.ReactElement {
   // Source-of-truth stats come from the public app endpoint. Surface
   // only metrics the backend exposes today AND that read meaningfully
   // for a host-app promo surface — likes and comments. `uv` is in the
@@ -601,48 +607,86 @@ function BottomBanner({ info, loading }: BottomBannerProps): React.ReactElement 
   const stats: Stat[] = [
     {
       key: "likes",
-      icon: <HeartIcon size={14} />,
+      icon: <HeartIcon size={16} />,
       filled: true,
       value: loading ? null : formatStat(info?.app.likeNum),
       label: "likes",
     },
     {
       key: "comments",
-      icon: <ChatIcon size={14} />,
+      icon: <ChatIcon size={16} />,
       value: loading ? null : formatStat(info?.app.commentsCount),
       label: "comments",
     },
   ];
 
+  // Remix tap reuses the same deeplink + iOS-store-timeout flow as the
+  // top banner — both point at `eazo://app/<appId>` so the mobile shell
+  // can route to the right surface (the Remix vs Open intent split is
+  // up to the host app to wire from the URL params, not this banner).
+  const onRemixClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+
   return (
     <div className="eazo-bottom-root" role="contentinfo">
-      <div className="eazo-bottom-stats" aria-label={loading ? "Loading app stats" : "App stats"}>
-        {stats.map((s) => (
-          <span key={s.key} className="eazo-bottom-stat">
-            <span className={`eazo-bottom-stat-icon${s.filled ? "" : " is-line"}`}>
-              {s.icon}
-            </span>
-            {s.value === null ? (
-              <span className="eazo-bottom-skel" />
-            ) : (
-              <span className="eazo-bottom-stat-value">{s.value}</span>
+      <div
+        className="eazo-bottom-stats"
+        aria-label={loading ? "Loading app stats" : "App stats"}
+      >
+        {stats.map((s, i) => (
+          <React.Fragment key={s.key}>
+            {i > 0 && (
+              <span className="eazo-bottom-stat-divider" aria-hidden="true" />
             )}
-            <span className="eazo-bottom-stat-label">{s.label}</span>
-          </span>
+            <span className="eazo-bottom-stat">
+              <span
+                className={`eazo-bottom-stat-icon${s.filled ? "" : " is-line"}`}
+              >
+                {s.icon}
+              </span>
+              <span className="eazo-bottom-stat-text">
+                {s.value === null ? (
+                  <span className="eazo-bottom-skel" />
+                ) : (
+                  <span className="eazo-bottom-stat-value">{s.value}</span>
+                )}
+                <span className="eazo-bottom-stat-label">{s.label}</span>
+              </span>
+            </span>
+          </React.Fragment>
         ))}
       </div>
-      <a
-        className="eazo-bottom-site"
-        href="https://eazo.ai/"
-        target="_blank"
-        rel="noreferrer noopener"
-      >
-        Powered by <b>eazo.ai</b>
-        <svg width={10} height={10} viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M7 17 17 7M9 7h8v8" />
-        </svg>
-      </a>
+      <div className="eazo-bottom-actions">
+        <a
+          className="eazo-bottom-site"
+          href="https://eazo.ai/"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <b>eazo.ai</b>
+          <svg
+            width={10}
+            height={10}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M7 17 17 7M9 7h8v8" />
+          </svg>
+        </a>
+        <a
+          className="eazo-bottom-remix"
+          href={cta.href}
+          onClick={onRemixClick}
+          aria-label="Remix this app"
+        >
+          <RemixIcon size={17} />
+          Remix
+          <span className="eazo-bottom-remix-suffix">&nbsp;this app</span>
+        </a>
+      </div>
     </div>
   );
 }
