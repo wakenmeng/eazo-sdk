@@ -20,4 +20,9 @@ export type {
   ShareComposeResult,
 } from "./internal/capabilities/share";
 export type { NotificationsSubscriptionResult } from "./internal/capabilities/notifications";
+export type {
+  PublicAppData,
+  PublicAppInfo,
+  PublicAppViewer,
+} from "./internal/banner-ui/app-info";
 export type { User, DeviceContext, AuthState, EazoState } from "./types";

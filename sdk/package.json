@@ -10,6 +10,10 @@
       "default": "./dist/index.js"
     },
     "./react": {
+      "react-server": {
+        "types": "./dist/react.server.d.ts",
+        "default": "./dist/react.server.js"
+      },
       "types": "./dist/react.d.ts",
       "default": "./dist/react.js"
     },

@@ -3,6 +3,8 @@
 import * as React from "react";
 
 import { EazoBrandBanner } from "./internal/banner-ui";
+import type { PublicAppInfo } from "./internal/banner-ui/app-info";
+import { setInitialAppInfo } from "./internal/banner-ui/initial-info";
 import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
@@ -46,6 +48,14 @@ export function EazoProvider(props: {
    * `NEXT_PUBLIC_*` alias. Falls back to `https://eazo.ai`.
    */
   apiBase?: string | null;
+  /**
+   * Pre-fetched `PublicAppInfo` for the host app. When supplied (typically
+   * from a Server Component / SSR loader using
+   * `fetchPublicAppInfo` from `@eazo/sdk/server`), the handoff banner
+   * renders real content on first paint and skips the client-side fetch
+   * entirely. Omit it to fall back to the SDK's own client fetch + skeleton.
+   */
+  initialAppInfo?: PublicAppInfo | null;
 }): React.ReactElement {
   if (!props.appId) {
     throw new Error(
@@ -56,6 +66,7 @@ export function EazoProvider(props: {
   // Setter ignores null/empty — calling unconditionally keeps the
   // "clear on Provider unmount with apiBase removed" semantics simple.
   setHostApiBase(props.apiBase ?? null);
+  setInitialAppInfo(props.initialAppInfo ?? null);
 
   React.useEffect(() => {
     // Starting the bridge is idempotent; capability access may have already done so.

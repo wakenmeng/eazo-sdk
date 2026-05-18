@@ -15,6 +15,7 @@ import {
 } from "./icons";
 import { QrSvg } from "./qr";
 import { fetchPublicAppInfo, type PublicAppInfo } from "./app-info";
+import { getInitialAppInfo } from "./initial-info";
 import { resolveBannerCta, type BannerCta } from "./store-links";
 import {
   BANNER_HEIGHT_DESKTOP,
@@ -29,6 +30,11 @@ import {
 // store. Matches the value in `store-links.ts`.
 const IOS_FALLBACK_TIMEOUT_MS = 1500;
 const MOBILE_BREAKPOINT_PX = 480;
+// Delay before the center handoff modal appears — gives users a minute
+// to actually use the app before the strong CTA pops up. The top and
+// bottom banners stay visible from first paint; this only gates the
+// center "Open in Eazo app" modal.
+const MODAL_DELAY_MS = 60_000;
 
 function isMobile(): boolean {
   if (typeof window === "undefined") return false;
@@ -95,17 +101,28 @@ function deriveInitials(name: string): string {
 export function EazoBrandBanner(): React.ReactElement | null {
   const [mounted, setMounted] = React.useState(false);
   const [cta, setCta] = React.useState<BannerCta | null>(null);
-  const [info, setInfo] = React.useState<PublicAppInfo | null>(null);
+  // Seed `info` from the prefetched value (if the host's Server
+  // Component passed `<EazoProvider initialAppInfo>`) so the modal
+  // renders real content on first paint without a skeleton flash.
+  // `useState(initializer)` runs the lazy initializer once at first
+  // render; `getInitialAppInfo()` reads what `EazoProvider` stashed
+  // synchronously in the SAME render pass.
+  const [info, setInfo] = React.useState<PublicAppInfo | null>(() => getInitialAppInfo());
   // `loading === true` until the public app-info fetch settles (success
-  // or failure). Drives the skeleton in the modal + bottom stats so the
-  // user doesn't see a flash of generic "This app" copy.
-  const [loading, setLoading] = React.useState(true);
+  // or failure). Skip the loading state entirely when a prefetched value
+  // is already in hand — no fetch is going to fire.
+  const [loading, setLoading] = React.useState(() => getInitialAppInfo() === null);
   const [mobile, setMobile] = React.useState(false);
   // In-memory dismiss for the strong-CTA modal — intentionally NOT
   // persisted. Every page load (navigation, refresh, new tab) re-engages
   // the modal; the X / ESC just hides it for the current session of this
   // page. The top + bottom banners stay regardless.
   const [modalDismissed, setModalDismissed] = React.useState(false);
+  // Gate the modal behind a delay so users get to use the app for a
+  // minute before the strong CTA interrupts them. Flips once on mount;
+  // dismiss state above overrides this — once closed, the modal stays
+  // closed for this page load even if the timer hasn't fired yet.
+  const [modalReady, setModalReady] = React.useState(false);
   // Resolved on mount in the browser. Encoded by the QR so a desktop
   // scan opens the EXACT page on a phone (which then sends the user
   // through the same handoff via the mobile route).
@@ -124,16 +141,28 @@ export function EazoBrandBanner(): React.ReactElement | null {
     setModalDismissed(true);
   }, []);
 
+  // Flip `modalReady` after MODAL_DELAY_MS so the strong CTA only
+  // appears once the user has had time to engage with the app. Cleaned
+  // up on unmount so a quick navigation doesn't leak a timer that
+  // re-renders the (now stale) Provider.
+  React.useEffect(() => {
+    if (!mounted) return;
+    const timer = window.setTimeout(() => {
+      setModalReady(true);
+    }, MODAL_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [mounted]);
+
   // ESC closes the modal — same dismiss path as the X button. Only
   // armed while the modal is actually rendered.
   React.useEffect(() => {
-    if (!mounted || modalDismissed) return;
+    if (!mounted || modalDismissed || !modalReady) return;
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === "Escape") dismissModal();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [mounted, modalDismissed, dismissModal]);
+  }, [mounted, modalDismissed, modalReady, dismissModal]);
 
   // Reserve top + bottom space on `<html>` so the host page's own layout
   // doesn't tuck under the fixed banners. Restored on unmount.
@@ -157,18 +186,22 @@ export function EazoBrandBanner(): React.ReactElement | null {
     };
   }, [mounted]);
 
-  // Fetch public app info. The overlay still renders without it — the
-  // identity falls back to initials / generic copy. `loading` clears
-  // either way so the skeleton doesn't shimmer forever on fetch failure.
+  // Fetch public app info on the client when the host didn't prefetch.
+  // If `initialAppInfo` was supplied via the Provider, `info` is already
+  // seeded above and `loading` is already false — skip the fetch entirely.
+  // The overlay still renders without info — the identity falls back to
+  // initials / generic copy. `loading` clears either way so the skeleton
+  // doesn't shimmer forever on fetch failure.
   React.useEffect(() => {
     if (!mounted) return;
+    if (info) return;
     const appId = getAppId();
     if (!appId) {
       setLoading(false);
       return;
     }
     const controller = new AbortController();
-    fetchPublicAppInfo(appId, controller.signal)
+    fetchPublicAppInfo(appId, { signal: controller.signal })
       .then((data) => {
         if (controller.signal.aborted) return;
         setInfo(data);
@@ -179,6 +212,11 @@ export function EazoBrandBanner(): React.ReactElement | null {
         setLoading(false);
       });
     return () => controller.abort();
+    // `info` is captured via closure on first mount; intentionally not in
+    // deps — we only want to attempt the client fetch once, on
+    // mount, if no prefetch was supplied. Re-fetching when `info` later
+    // changes would be pointless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
   if (!mounted || !cta) return null;
@@ -186,7 +224,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
   return (
     <div className="eazo-handoff-root">
       <TopBanner cta={cta} pageUrl={pageUrl} />
-      {modalDismissed ? null : (
+      {modalDismissed || !modalReady ? null : (
         <Overlay
           info={info}
           cta={cta}
