@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-05-19
+
 ### Changed (breaking — plain-web hosts only)
 
 - **`<EazoProvider>` now wraps host children in a two-layer container
@@ -95,6 +97,14 @@ Net effect: a web app inside the eazo-mobile WebView gets the SDK's
 bridge transport (its actual purpose there) and nothing else — no banner
 DOM, no banner CSS, no scroll-model rewrites, no `<html>` class/padding/
 CSS-var pollution.
+
+### Style
+
+- Bottom-banner Remix CTA glyph switched to **shuffle** (Lucide
+  `Shuffle` path data). Matches the same action's rendering in the
+  mobile shell (`SF Symbol shuffle` on iOS, `Ionicons shuffle-outline`
+  on Android), so the Remix glyph reads identically wherever a user
+  encounters it.
 
 ## [0.13.0] - 2026-05-08
 
