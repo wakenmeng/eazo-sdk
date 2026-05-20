@@ -1,3 +1,5 @@
+import { getHost } from "../env";
+
 const STYLE_ID = "eazo-sdk-banner-ui";
 
 export const BANNER_HEIGHT_DESKTOP = 52;
@@ -26,67 +28,124 @@ const TOKENS = `
 
 export const BANNER_UI_CSS = `
 /* ════════════════════════════════════════════════════════════════════════
- *  Host content safe area
+ *  Host content safe area — two-layer wrapper
  *
- *  '.eazo-app-area' wraps the host's children at the EazoProvider level.
- *  The wrapper element is ALWAYS rendered (the markup is static and
- *  identical across SSR and CSR, so hydration is clean), but the styles
- *  that change scroll semantics — \`position: fixed\`, \`overflow: auto\`,
- *  and \`transform: translateZ(0)\` — only apply when the host is a plain
- *  web browser AND the handoff banners are mounted. We signal that with
+ *  Two nested elements wrap the host's children at the EazoProvider level:
+ *
+ *    <div class="eazo-app-area">              ← outer: containing block
+ *      <div class="eazo-app-area-scroller">   ← inner: scroll container
+ *        {host children}
+ *      </div>
+ *    </div>
+ *
+ *  Both elements are ALWAYS rendered (SSR + CSR markup is static, no
+ *  hydration mismatch). The effective styles activate only when the host
+ *  is a plain web browser AND the handoff banners are mounted — gated on
  *  the \`eazo-host-web\` class on \`<html>\`, set/cleared by the banner-ui
- *  effect.
+ *  effect. In a mobile WebView or iframe both elements are inert \`<div>\`s.
  *
- *  Why scope the styles:
- *    - The wrapper only EXISTS to keep host content clear of the SDK's
- *      bottom banner. In a mobile WebView or an embedded iframe, the
- *      banner doesn't render (banner-ui bails on those hosts), so the
- *      wrapper's overlap-avoidance has no job. Activating the fixed-
- *      positioning + overflow + containing-block semantics anyway would
- *      silently break \`window.scrollY\`, \`window\` scroll listeners,
- *      \`document.body { overflow: hidden }\` modal locks, and contain
- *      host modals at \`position: fixed; inset: 0\` — for ZERO product
- *      benefit in those environments.
- *    - On plain web (where the banner DOES render and DOES overlap),
- *      these semantic changes are the price of automatic safe-area
- *      handling and are documented in CHANGELOG.
+ *  Why two layers (this is the whole point):
  *
- *  How the fix works on web:
- *    - \`transform: translateZ(0)\` makes the wrapper a containing block
- *      for \`position: fixed\` descendants. A host's own bottom-fixed
- *      element (sticky toolbar, glass CTA, mobile tab bar) now resolves
- *      to the wrapper's edge — which sits between the banners — instead
- *      of the viewport's bottom edge, so it never overlaps the SDK's
- *      bottom banner.
- *    - \`inset\` reads the \`--eazo-handoff-top|bottom\` CSS variables
- *      (set on \`<html>\` by the banner-ui effect) with a \`0px\`
- *      fallback for the brief frame between mount and effect-run.
+ *  A single-element wrapper that combines \`transform: translateZ(0)\` AND
+ *  \`overflow: auto\` LOOKS like it should keep host's \`position: fixed;
+ *  bottom: 0\` elements pinned above the SDK banner — the transform
+ *  reparents the containing block to the wrapper, after all. But under
+ *  that combination, browsers (per the CSS positioning + scrolling spec
+ *  interaction) demote the fixed descendant to absolute-like behavior
+ *  AND translate it by the wrapper's scroll offset. The "sticky CTA"
+ *  ends up scrolling with content rather than staying pinned.
+ *
+ *  Splitting them fixes this:
+ *    - \`.eazo-app-area\` (outer): \`position: fixed\` between the banners
+ *      + \`transform: translateZ(0)\`. It establishes the containing block
+ *      but is NOT a scroll container — its own padding box never moves.
+ *    - \`.eazo-app-area-scroller\` (inner): \`position: absolute; inset: 0\`
+ *      to fill the outer + \`overflow-y: auto\` to scroll host content. It
+ *      is NOT a containing block for fixed descendants (no transform,
+ *      static position contexts don't qualify), so host's
+ *      \`position: fixed; bottom: 0\` still resolves all the way up to the
+ *      outer. The bar is painted in the outer's coordinate space, OUTSIDE
+ *      the inner's scroll layer, so scrolling host content does NOT
+ *      translate it. Result: bar stays visually pinned to the outer's
+ *      bottom edge — which sits exactly above the SDK banner.
+ *
+ *  Why scope the styles to \`html.eazo-host-web\`:
+ *    The wrapper only exists to keep host content clear of the SDK's
+ *    handoff banners. In a mobile WebView or iframe the banners don't
+ *    render — the wrapper has no job, and activating the fixed-position
+ *    + overflow + containing-block semantics there would silently break
+ *    \`window.scrollY\`, \`window\` scroll listeners, body-overflow scroll
+ *    locks, and host modals at \`position: fixed; inset: 0\` for zero
+ *    product benefit. So both layers stay inert outside plain web.
  *
  *  Known trade-offs on web (called out in CHANGELOG):
- *    - Scrolling happens inside the wrapper, not on \`window\`. Code
- *      reading \`window.scrollY\` or attaching \`scroll\` listeners to
- *      \`window\` must migrate to the wrapper element.
- *    - \`document.body { overflow: hidden }\` no longer locks scroll
- *      (the body isn't the scroll container); modal libraries that
- *      rely on body-scroll-lock must target the wrapper or use a
- *      portal-friendly lock.
+ *    - Scrolling happens inside \`.eazo-app-area-scroller\`, not on
+ *      \`window\`. Code reading \`window.scrollY\` or attaching \`scroll\`
+ *      listeners to \`window\` must migrate to the scroller element.
+ *    - \`document.body { overflow: hidden }\` no longer locks scroll;
+ *      body-scroll-lock libraries must target the scroller.
  *    - Host modals at \`position: fixed; inset: 0\` are contained to
- *      the wrapper rather than covering the full viewport — visually
- *      equivalent (the wrapper IS the safe-area box) but \`inset: 0\`
- *      no longer means "cover everything including the banners".
+ *      the outer wrapper rather than covering the full viewport —
+ *      visually equivalent (the wrapper IS the safe-area box) but
+ *      \`inset: 0\` no longer covers the banner area.
  */
+/* Default state for the two wrapper layers: \`display: contents\` makes
+ * the wrapper boxes disappear from layout entirely. Their children
+ * participate in the GRANDPARENT's layout context (i.e. directly in the
+ * \`<body>\`'s flex column) as if the wrapper elements didn't exist.
+ * With no generated box there's also no containing block for fixed
+ * descendants — host's \`position: fixed; bottom: 0\` resolves all the
+ * way up to the viewport, exactly as it would without the SDK present.
+ *
+ * This is the ONLY state the wrapper takes in mobile WebView / iframe
+ * hosts: the banners aren't mounted, the wrapper has no job, so it
+ * collapses to a layout no-op. \`html.eazo-host-web\` (added by banner-ui
+ * on mount, only in plain web) overrides BOTH layers below to their
+ * full active styles. */
+.eazo-app-area,
+.eazo-app-area-scroller {
+  display: contents;
+}
+
 html.eazo-host-web .eazo-app-area {
+  display: block;
   position: fixed;
   inset: var(--eazo-handoff-top, 0px) 0 var(--eazo-handoff-bottom, 0px) 0;
-  /* overflow-x:hidden so horizontal overflow doesn't bleed past the
-   * wrapper edges into the banner area; overflow-y:auto so the wrapper
-   * is the scroll container for host content. */
+  /* Containing block for fixed-positioned descendants — this is what
+   * lets host's \`position: fixed; bottom: 0\` anchor to the wrapper
+   * (between the banners) instead of to the viewport (under our banner).
+   *
+   * IMPORTANT: do not move \`overflow: auto\` onto this element. The
+   * combination of transform + overflow makes fixed descendants scroll
+   * with content. The scroll lives on \`.eazo-app-area-scroller\` below. */
+  transform: translateZ(0);
+}
+html.eazo-host-web .eazo-app-area-scroller {
+  display: block;
+  /* Fill the outer wrapper exactly. \`position: absolute\` is the
+   * cheapest way to do this — \`width/height: 100%\` plus margin/padding
+   * inheritance can leak; \`inset: 0\` against the outer's padding box
+   * is unambiguous. */
+  position: absolute;
+  inset: 0;
+  /* This is the actual scroll container for host content. Crucially,
+   * it does NOT have \`transform\` — so it is NOT a containing block
+   * for host's \`position: fixed\` descendants. Those still resolve up
+   * to \`.eazo-app-area\` and stay pinned to its edges, ignoring scroll. */
   overflow-x: hidden;
   overflow-y: auto;
-  /* Establishes a containing block for fixed-positioned descendants —
-   * the entire point of the wrapper. Without this, host's \`position:
-   * fixed; bottom: 0\` resolves to the viewport and overlaps our banner. */
-  transform: translateZ(0);
+  /* Disable rubber-band overscroll. The wrapper sits between two fixed
+   * banners on its own compositor layer (via the outer's translateZ);
+   * during native overscroll bounce the scroller's content briefly
+   * translates beyond its padding box and the compositor briefly
+   * reveals adjacent layers — the cream top banner above, the white
+   * bottom banner below, the body's UA-default background everywhere
+   * else — as a flash of "other colors" at the top/bottom edges.
+   * \`overscroll-behavior: none\` keeps the scroll fully contained and
+   * eliminates that visual seam, at the cost of the native bounce
+   * gesture inside the wrapper (acceptable trade for the SDK's promo
+   * surface, which is already constrained by the banner sandwich). */
+  overscroll-behavior: none;
 }
 
 /* The whole handoff UI lives inside ONE fixed-positioned container that
@@ -676,6 +735,14 @@ html.eazo-host-web .eazo-app-area {
 
 export function ensureBannerStylesInjected(): void {
   if (typeof document === "undefined") return;
+  // Banner CSS only matters in plain-web hosts where the handoff banners
+  // actually render. In a mobile WebView or embedded iframe (where the
+  // banner-ui mount-gate bails before any rendering happens), this CSS
+  // would just sit inert in `document.head` — every selector either
+  // \`.eazo-*\` (matches nothing host-side) or \`html.eazo-host-web ...\`
+  // (banner-ui never adds that class outside web). Skip the inject so
+  // the SDK leaves no banner-related styles in mobile/iframe documents.
+  if (getHost() !== "web") return;
   // Always overwrite the textContent rather than early-return on
   // existing tag presence. Next.js Fast Refresh re-imports this module
   // with updated `BANNER_UI_CSS`, but the previously-injected <style>
