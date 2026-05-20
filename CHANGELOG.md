@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-05-21
+
+### Changed
+
+- **`<EazoProvider>` is now zero-prop in the typical case.** Both
+  `appId` and `apiBase` props became optional; the SDK auto-reads
+  `EAZO_APP_ID` (and the framework-prefixed variants) and
+  `EAZO_PLATFORM_API_BASE` from `process.env` at SSR — under Next.js
+  App Router the server provider forwards the resolved values to the
+  client as serialized props, so a server-only env reaches the client
+  bundle without a `NEXT_PUBLIC_*` alias. Host code can now write
+  just `<EazoProvider>{children}</EazoProvider>` in the root layout.
+  Passing `appId={…}` / `apiBase={…}` explicitly is still supported
+  as a per-render override (multi-tenant rendering, testing).
+- A missing `EAZO_APP_ID` now throws from the Provider with a clear
+  "set EAZO_APP_ID in env (or pass `<EazoProvider appId={...}>`)"
+  message at first render, instead of surfacing later at the first
+  capability call.
+
+## [0.16.0] - 2026-05-21
+
+### Changed (breaking — env var rename)
+
+- **Renamed `EAZO_API_BASE` → `EAZO_PLATFORM_API_BASE`** to align with
+  the public Eazo platform conventions. The fallback list of accepted
+  env names is now `EAZO_PLATFORM_API_BASE`,
+  `NEXT_PUBLIC_EAZO_PLATFORM_API_BASE`,
+  `EXPO_PUBLIC_EAZO_PLATFORM_API_BASE`,
+  `VITE_EAZO_PLATFORM_API_BASE`, `PUBLIC_EAZO_PLATFORM_API_BASE`,
+  `REACT_APP_EAZO_PLATFORM_API_BASE`. Projects that previously set
+  `EAZO_API_BASE` must rename the env key to keep targeting their
+  staging / non-prod platform.
+
+### Added
+
+- **Server Component `<EazoProvider>` auto-reads
+  `EAZO_PLATFORM_API_BASE`** at SSR and forwards the value to the
+  client provider as a prop, so a server-only env reaches the client
+  without a `NEXT_PUBLIC_*` alias. Templates no longer need to read
+  the env manually in `layout.tsx`.
+
 ## [0.15.0] - 2026-05-19
 
 ### Changed (breaking — plain-web hosts only)
