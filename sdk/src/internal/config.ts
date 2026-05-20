@@ -27,13 +27,13 @@ const APP_ID_ENV_NAMES = [
 ] as const;
 
 const API_BASE_ENV_NAMES = [
+  "EAZO_PLATFORM_API_BASE",
   "EAZO_API_BASE",
-  "EAZO_API_URL",
-  "NEXT_PUBLIC_EAZO_API_URL",
-  "EXPO_PUBLIC_EAZO_API_URL",
-  "VITE_EAZO_API_URL",
-  "PUBLIC_EAZO_API_URL",
-  "REACT_APP_EAZO_API_URL",
+  "NEXT_PUBLIC_EAZO_PLATFORM_API_BASE",
+  "EXPO_PUBLIC_EAZO_PLATFORM_API_BASE",
+  "VITE_EAZO_PLATFORM_API_BASE",
+  "PUBLIC_EAZO_PLATFORM_API_BASE",
+  "REACT_APP_EAZO_PLATFORM_API_BASE",
 ] as const;
 
 /** Set by `<EazoProvider appId={...}>`. */
@@ -62,6 +62,11 @@ export function getPlatformApiBase(override?: string): string {
 
 export function readAppIdFromEnv(): string | null {
   return readEnvByNames(APP_ID_ENV_NAMES);
+}
+
+/** Env-only lookup; skips the host-injection cache used by getPlatformApiBase. */
+export function readApiBaseFromEnv(): string | null {
+  return readEnvByNames(API_BASE_ENV_NAMES);
 }
 
 export function __resetConfig(): void {

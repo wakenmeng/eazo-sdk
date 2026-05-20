@@ -21,42 +21,26 @@ const MountedContext = React.createContext(false);
 /**
  * Mounts the SDK runtime. Place once at the root of your React tree.
  *
- *   <EazoProvider
- *     appId={process.env.EAZO_APP_ID}
- *     apiBase={process.env.EAZO_API_BASE}
- *   >
+ *   <EazoProvider appId={process.env.EAZO_APP_ID}>
  *     <App />
  *   </EazoProvider>
  *
- * `<EazoProvider>` is how an app's appId reaches every SDK capability
- * (`auth`, `device`, `share`, `storage`, `memory`); every project must
- * pass one. Also mounts the shared login and share UIs so `auth.login()`
- * and `share.compose()` work anywhere in the tree.
+ * Every project must pass an `appId` — it's how the SDK reaches every
+ * capability (`auth`, `device`, `share`, `storage`, `memory`). Also
+ * mounts the shared login and share UIs.
  *
- * **`apiBase` is optional.** When omitted the SDK calls the production
- * Eazo platform (`https://eazo.ai`). Pass it explicitly to point the
- * SDK at staging / a local platform server during development — this is
- * how a server-only env like `EAZO_API_BASE` (which Next.js does NOT
- * inline into the client bundle) reaches the browser side of the SDK.
+ * Under Next.js App Router the bundler resolves this through the
+ * server variant (`react.server.tsx`) which auto-reads
+ * `EAZO_PLATFORM_API_BASE` from env and prefetches the handoff
+ * `PublicAppInfo` — host code doesn't need to plumb either.
  */
 export function EazoProvider(props: {
   children: React.ReactNode;
   /** Eazo app ID. Required. */
   appId: string;
-  /**
-   * Optional platform API base URL. Pass it from a Server Component when
-   * the value comes from a server-only env var (e.g. `process.env.EAZO_API_BASE`
-   * in a Next.js layout) so it reaches the client without needing a
-   * `NEXT_PUBLIC_*` alias. Falls back to `https://eazo.ai`.
-   */
+  /** Optional override. Defaults to `EAZO_PLATFORM_API_BASE` from env, then `https://eazo.ai`. */
   apiBase?: string | null;
-  /**
-   * Pre-fetched `PublicAppInfo` for the host app. When supplied (typically
-   * from a Server Component / SSR loader using
-   * `fetchPublicAppInfo` from `@eazo/sdk/server`), the handoff banner
-   * renders real content on first paint and skips the client-side fetch
-   * entirely. Omit it to fall back to the SDK's own client fetch + skeleton.
-   */
+  /** Pre-fetched `PublicAppInfo`. When set, skips the client-side fetch + skeleton. */
   initialAppInfo?: PublicAppInfo | null;
 }): React.ReactElement {
   if (!props.appId) {

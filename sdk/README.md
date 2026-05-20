@@ -246,5 +246,5 @@ App code never branches on environment — the capability API is the same on bot
 | Variable | Required | Used by |
 |---|---|---|
 | `EAZO_APP_ID` | yes | server-side; set framework-prefixed alias (`NEXT_PUBLIC_*`, `EXPO_PUBLIC_*` …) too if your bundler needs it for the browser, or pass via `<EazoProvider appId={...}>` |
-| `EAZO_API_BASE` | optional | platform URL fallback when no host injects one (mobile WebView always injects via `hello.apiBase`) |
+| `EAZO_PLATFORM_API_BASE` | optional | platform URL fallback when no host injects one (mobile WebView always injects via `hello.apiBase`). Auto-read by the server `<EazoProvider>` under Next.js RSC and forwarded to the client; also read by `notifications.publish` server-side. |
 | `EAZO_PRIVATE_KEY` | server | `requireAuth`, `notifications.publish` |
