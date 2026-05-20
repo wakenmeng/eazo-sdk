@@ -16,8 +16,10 @@ import type { EazoState } from "./types";
  *
  * Zero-config: the SDK auto-reads `EAZO_APP_ID` (and
  * `EAZO_PLATFORM_API_BASE` when set) from env. For non-RSC frameworks
- * set a framework-prefixed alias (`NEXT_PUBLIC_EAZO_APP_ID`,
- * `EXPO_PUBLIC_EAZO_APP_ID`, …) or call `setAppId(...)` at startup.
+ * (Vite, plain Webpack, etc.) set a framework-prefixed alias the
+ * bundler can inline into the client bundle —
+ * `NEXT_PUBLIC_EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`,
+ * `VITE_EAZO_APP_ID`, etc.
  *
  * Under Next.js App Router this resolves to the server variant
  * (`react.server.tsx`), which prefetches the handoff `PublicAppInfo`

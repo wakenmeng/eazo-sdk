@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-05-21
+
+### Docs
+
+- **Corrects the 0.17.0 CHANGELOG entry.** The original wording said
+  `appId` / `apiBase` / `initialAppInfo` "became optional" and that
+  passing them explicitly was "still supported as a per-render
+  override." That was wrong: the refactor in 0.17.0 **removed** all
+  three props from the public `<EazoProvider>` signature entirely.
+  The corrected entry is below. No runtime change in 0.17.2 — only
+  the CHANGELOG text and a small docstring tweak in `react.tsx`.
+
 ## [0.17.1] - 2026-05-21
 
 ### Changed
@@ -20,22 +32,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.17.0] - 2026-05-21
 
-### Changed
+### Changed (breaking — public Provider signature)
 
-- **`<EazoProvider>` is now zero-prop in the typical case.** Both
-  `appId` and `apiBase` props became optional; the SDK auto-reads
-  `EAZO_APP_ID` (and the framework-prefixed variants) and
-  `EAZO_PLATFORM_API_BASE` from `process.env` at SSR — under Next.js
-  App Router the server provider forwards the resolved values to the
-  client as serialized props, so a server-only env reaches the client
-  bundle without a `NEXT_PUBLIC_*` alias. Host code can now write
-  just `<EazoProvider>{children}</EazoProvider>` in the root layout.
-  Passing `appId={…}` / `apiBase={…}` explicitly is still supported
-  as a per-render override (multi-tenant rendering, testing).
-- A missing `EAZO_APP_ID` now throws from the Provider with a clear
-  "set EAZO_APP_ID in env (or pass `<EazoProvider appId={...}>`)"
-  message at first render, instead of surfacing later at the first
-  capability call.
+- **`<EazoProvider>` is now strictly zero-prop.** The `appId`,
+  `apiBase`, and `initialAppInfo` props were **removed** from the
+  public Provider signature in both the client (`@eazo/sdk/react`)
+  and the server (`react-server` condition) entries. Host code that
+  passed any of these props will now fail TypeScript (and silently
+  drop the values at runtime). Configuration moves entirely to env:
+  the SDK auto-reads `EAZO_APP_ID` (and the framework-prefixed
+  variants — `NEXT_PUBLIC_EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`,
+  …) and `EAZO_PLATFORM_API_BASE` at SSR. Under Next.js App Router
+  the server provider prefetches `PublicAppInfo` and forwards
+  appId / apiBase / initialAppInfo to the runtime through an
+  internal `_EazoRuntimeProvider` — host code only writes
+  `<EazoProvider>{children}</EazoProvider>`.
+  - Migration: drop any `appId` / `apiBase` / `initialAppInfo`
+    props from `<EazoProvider>`. Make sure `EAZO_APP_ID` (and
+    `EAZO_PLATFORM_API_BASE`, if pointing at a non-prod platform)
+    is set in env — including a `NEXT_PUBLIC_*` alias when the
+    bundler can't read the bare name at the client (SPA, plain
+    Webpack, Vite).
+- A missing `EAZO_APP_ID` now throws from the Provider at first
+  render with a clear "EAZO_APP_ID is not set" message, instead of
+  surfacing later at the first capability call.
 
 ## [0.16.0] - 2026-05-21
 
