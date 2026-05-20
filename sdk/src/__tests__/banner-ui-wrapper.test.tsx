@@ -56,6 +56,9 @@ function removeBannerStyleTag(): void {
 describe("EazoProvider .eazo-app-area wrapper", () => {
   beforeEach(() => {
     __resetSDK();
+    // `<EazoProvider>` reads its appId from env — set one for the tests
+    // that exercise mount behaviour.
+    process.env.EAZO_APP_ID = "test";
     // Make sure no leftover state from a previous test leaks the class
     // onto <html>.
     document.documentElement.classList.remove("eazo-host-web");
@@ -65,6 +68,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
 
   afterEach(() => {
     __resetSDK();
+    delete process.env.EAZO_APP_ID;
     removeRN();
     document.documentElement.classList.remove("eazo-host-web");
     document.documentElement.style.cssText = "";
@@ -74,7 +78,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
   it("renders both wrapper layers around children regardless of host", () => {
     installRN();
     const { container, unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <div data-testid="host-child">hello</div>
       </EazoProvider>,
     );
@@ -98,7 +102,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
   it("does NOT set eazo-host-web on <html> in the mobile WebView host", async () => {
     installRN();
     const { unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span />
       </EazoProvider>,
     );
@@ -122,7 +126,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
   it("does NOT inject the banner-ui stylesheet into <head> in the mobile WebView host", async () => {
     installRN();
     const { unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span />
       </EazoProvider>,
     );
@@ -140,7 +144,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
   it("does NOT mount banner-UI React components in the mobile WebView host", async () => {
     installRN();
     const { container, unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span data-testid="host-child" />
       </EazoProvider>,
     );
@@ -161,7 +165,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
   it("DOES inject the banner-ui stylesheet into <head> on plain-web hosts", async () => {
     removeRN();
     const { unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span />
       </EazoProvider>,
     );
@@ -180,7 +184,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
     // No RN bridge installed → getHost() === "web".
     removeRN();
     const { unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span />
       </EazoProvider>,
     );
@@ -209,7 +213,7 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
     html.style.setProperty("--eazo-handoff-bottom", "888px");
 
     const { unmount } = render(
-      <EazoProvider appId="test">
+      <EazoProvider>
         <span />
       </EazoProvider>,
     );

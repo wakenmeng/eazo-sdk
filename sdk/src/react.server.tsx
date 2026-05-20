@@ -2,17 +2,18 @@
 // `"react-server"` export condition. In any non-RSC context the
 // consumer transparently gets the client provider from `./react`.
 //
-// Two server-side responsibilities, hidden from host apps:
-//   1. Read `EAZO_PLATFORM_API_BASE` and forward it as a prop, since
+// Server-side responsibilities, hidden from host apps:
+//   1. Read `EAZO_APP_ID` and `EAZO_PLATFORM_API_BASE` from env and
+//      forward them to the runtime provider via internal props, since
 //      Next.js doesn't inline non-`NEXT_PUBLIC_*` envs into the client.
 //   2. Prefetch `PublicAppInfo` so the handoff overlay paints real
 //      content on first frame.
 
 import * as React from "react";
 
-import { EazoProvider as EazoClientProvider } from "./react";
 import { fetchPublicAppInfo } from "./internal/banner-ui/app-info";
-import { readApiBaseFromEnv } from "./internal/config";
+import { readApiBaseFromEnv, readAppIdFromEnv } from "./internal/config";
+import { _EazoRuntimeProvider } from "./internal/runtime-provider";
 
 export { useEazo } from "./react";
 
@@ -45,41 +46,34 @@ async function getRequestUserAgent(): Promise<string | null> {
   }
 }
 
-export async function EazoProvider(props: {
+export async function EazoProvider({
+  children,
+}: {
   children: React.ReactNode;
-  /** Eazo app ID. Required. */
-  appId: string;
-  /** Optional override. Defaults to `EAZO_PLATFORM_API_BASE` from env. */
-  apiBase?: string | null;
-  /** Pre-resolved `PublicAppInfo`. When set, skips the in-Provider fetch. */
-  initialAppInfo?: import("./internal/banner-ui/app-info").PublicAppInfo | null;
 }): Promise<React.ReactElement> {
-  if (!props.appId) {
+  const appId = readAppIdFromEnv();
+  if (!appId) {
     throw new Error(
-      "@eazo/sdk: <EazoProvider appId> is required. Pass your Eazo app id explicitly.",
+      "@eazo/sdk: EAZO_APP_ID is not set. Add it to .env so the SDK can resolve the host app.",
     );
   }
-  const apiBase = props.apiBase ?? readApiBaseFromEnv();
+  const apiBase = readApiBaseFromEnv();
 
   // Skip the prefetch inside Eazo Mobile WebView — the handoff overlay
   // is `getHost()`-gated and never renders there.
   let initialAppInfo: import("./internal/banner-ui/app-info").PublicAppInfo | null = null;
-  if (props.initialAppInfo !== undefined) {
-    initialAppInfo = props.initialAppInfo;
-  } else {
-    const ua = await getRequestUserAgent();
-    if (!isMobileWebViewUserAgent(ua)) {
-      initialAppInfo = await fetchPublicAppInfo(props.appId, { apiBase });
-    }
+  const ua = await getRequestUserAgent();
+  if (!isMobileWebViewUserAgent(ua)) {
+    initialAppInfo = await fetchPublicAppInfo(appId, { apiBase });
   }
 
   return (
-    <EazoClientProvider
-      appId={props.appId}
+    <_EazoRuntimeProvider
+      appId={appId}
       apiBase={apiBase}
       initialAppInfo={initialAppInfo}
     >
-      {props.children}
-    </EazoClientProvider>
+      {children}
+    </_EazoRuntimeProvider>
   );
 }

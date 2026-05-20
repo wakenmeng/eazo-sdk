@@ -1,8 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { auth } from "../internal/capabilities/auth";
-import { setAppId } from "../internal/config";
 import { CHANNEL, VERSION } from "../internal/bridge/protocol";
 import { EazoProvider, useEazo } from "../react";
 import { __dispatchHostMessage, __resetSDK } from "../testing";
@@ -30,17 +28,18 @@ describe("useEazo", () => {
   beforeEach(() => {
     __resetSDK();
     installRN();
-    setAppId("test-key");
+    process.env.EAZO_APP_ID = "test-key";
   });
 
   afterEach(() => {
     __resetSDK();
     removeRN();
+    delete process.env.EAZO_APP_ID;
   });
 
   it("re-renders when selected slice changes", async () => {
     render(
-      <EazoProvider appId="test-key">
+      <EazoProvider>
         <UserName />
       </EazoProvider>,
     );

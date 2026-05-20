@@ -2,6 +2,7 @@ import { __resetBootstrap } from "./internal/bootstrap";
 import { __resetAuthCapability } from "./internal/capabilities/auth";
 import { __resetDeviceCapability } from "./internal/capabilities/device";
 import { __resetShareCapability } from "./internal/capabilities/share";
+import { __resetConfig } from "./internal/config";
 import { store } from "./internal/store";
 
 /**
@@ -16,6 +17,7 @@ export function __resetSDK(): void {
   __resetDeviceCapability();
   __resetShareCapability();
   __resetBootstrap();
+  __resetConfig();
   store.reset();
   if (typeof window !== "undefined") {
     try {

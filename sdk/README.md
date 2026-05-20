@@ -61,7 +61,6 @@ await auth.logout()
 auth.fetchSocialConnections()               // SocialConnection[]
 ```
 
-The SDK reads its app id from the environment (`NEXT_PUBLIC_EAZO_APP_ID`, `EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`). If you need to inject it programmatically — for example in a Next.js layout that resolves the value at SSR — pass it to `<EazoProvider appId={...}>`.
 
 #### `auth.login()` — unified login flow
 
@@ -172,41 +171,6 @@ export async function POST() {
 }
 ```
 
-The appId is a deployment-time constant, not a per-call argument. **Convention: set `EAZO_APP_ID`** (one name, no framework prefix). The recommended way to thread it into the SDK on the client side is through the `<EazoProvider appId={...}>` prop, populated from a Server Component:
-
-```tsx
-// app/layout.tsx (Server Component — Next.js App Router)
-import { EazoProvider } from "@eazo/sdk/react";
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <EazoProvider appId={process.env.EAZO_APP_ID}>
-          {children}
-        </EazoProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-```sh
-# .env
-EAZO_APP_ID=iVW3asOFoOvYr9sl
-```
-
-That's it — one canonical name, no `NEXT_PUBLIC_` alias required.
-
-For frameworks without a Server Component layer (Vite, plain Webpack apps, etc.) call `setAppId(...)` at app startup with whatever value you've sourced (env, runtime config endpoint, etc.):
-
-```ts
-import { setAppId } from "@eazo/sdk";
-setAppId(import.meta.env.VITE_EAZO_APP_ID);
-```
-
-If neither path is convenient, the SDK also reads any of these env vars as a fallback (priority top-down): `EAZO_APP_ID`, `NEXT_PUBLIC_EAZO_APP_ID`, `EXPO_PUBLIC_EAZO_APP_ID`, `VITE_EAZO_APP_ID`, `PUBLIC_EAZO_APP_ID`, `REACT_APP_EAZO_APP_ID`. The framework prefixes are kept for backward compatibility — new projects should prefer the prop or `setAppId()`.
-
 `audience` defaults to `"subscribers"` (v1's only value).
 
 Throws `EazoNotificationPublishError` on platform-level errors (`code` 401 = bad JWT, 403 = appId doesn't belong to your key, 413 = >5,000 subscribers, etc.).
@@ -245,6 +209,6 @@ App code never branches on environment — the capability API is the same on bot
 
 | Variable | Required | Used by |
 |---|---|---|
-| `EAZO_APP_ID` | yes | server-side; set framework-prefixed alias (`NEXT_PUBLIC_*`, `EXPO_PUBLIC_*` …) too if your bundler needs it for the browser, or pass via `<EazoProvider appId={...}>` |
-| `EAZO_PLATFORM_API_BASE` | optional | platform URL fallback when no host injects one (mobile WebView always injects via `hello.apiBase`). Auto-read by the server `<EazoProvider>` under Next.js RSC and forwarded to the client; also read by `notifications.publish` server-side. |
+| `EAZO_APP_ID` | yes | App ID; auto-resolved by `<EazoProvider>`. |
+| `EAZO_PLATFORM_API_BASE` | optional | Override the Eazo platform base URL (defaults to `https://eazo.ai`). |
 | `EAZO_PRIVATE_KEY` | server | `requireAuth`, `notifications.publish` |
