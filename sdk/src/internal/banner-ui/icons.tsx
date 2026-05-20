@@ -78,18 +78,20 @@ export function ArrowRightIcon({ size = 12 }: IconProps): React.ReactElement {
   );
 }
 
-/* Branch-with-pull glyph used on the bottom-banner Remix CTA. Two arrow
- * fragments (top-right out, bottom-left in) read as "fork this and pull
- * it back", which is the visual contract the design system uses for the
- * remix action across V5 / M5. */
+/* Shuffle glyph for the bottom-banner Remix CTA — matches what the
+ * mobile shell renders for the same action (`systemImage: "shuffle"`
+ * on iOS, Ionicon `shuffle-outline` on Android in
+ * `eazo-mobile/src/features/agenticApp/viewer/components/AppViewerImmersive.tsx`
+ * and `AppAddressBarMoreSheet.tsx`). Path data is Lucide's `Shuffle`. */
 export function RemixIcon({ size = 16 }: IconProps): React.ReactElement {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 3h5v5" />
-      <path d="M21 3 13 11" />
-      <path d="M3 21v-5a4 4 0 0 1 4-4h6" />
-      <path d="M9 16l-3-4 3-4" />
+      <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22" />
+      <path d="m18 2 4 4-4 4" />
+      <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
+      <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
+      <path d="m18 14 4 4-4 4" />
     </svg>
   );
 }
