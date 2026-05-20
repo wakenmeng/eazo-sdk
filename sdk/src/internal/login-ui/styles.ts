@@ -104,6 +104,9 @@ export const LOGIN_UI_CSS = `
 .eazo-provider-btn:disabled,
 .eazo-secondary-btn:disabled,
 .eazo-primary-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+/* Active loading button keeps full opacity so the spinner reads as the
+   in-progress affordance while the rest of the buttons stay dimmed. */
+.eazo-provider-btn-loading:disabled { opacity: 1; }
 
 .eazo-provider-icon {
   width: 20px;

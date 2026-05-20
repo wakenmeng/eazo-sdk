@@ -80,13 +80,14 @@ function ProvidersStep(): React.ReactElement {
   const submitting = ui.submitting;
 
   const handleSocial = async (identifier: string): Promise<void> => {
-    setLoginUI({ submitting: true, error: null });
+    setLoginUI({ submitting: true, submittingProvider: identifier, error: null });
     try {
       await auth.loginWithSocial(identifier);
-      setLoginUI({ open: false, submitting: false, error: null });
+      setLoginUI({ open: false, submitting: false, submittingProvider: null, error: null });
     } catch (err) {
       setLoginUI({
         submitting: false,
+        submittingProvider: null,
         error: err instanceof Error ? err.message : "Social login failed",
       });
     }
@@ -99,17 +100,26 @@ function ProvidersStep(): React.ReactElement {
           <div className="eazo-spinner" />
         </div>
       ) : (
-        ui.providers.map((conn) => (
-          <button
-            key={conn.identifier}
-            className="eazo-provider-btn"
-            onClick={() => handleSocial(conn.identifier)}
-            disabled={submitting}
-          >
-            <span className="eazo-provider-icon">{pickProviderIcon(conn.provider)}</span>
-            <span>Continue with {conn.tooltip?.["en-US"] || conn.name_en || conn.provider}</span>
-          </button>
-        ))
+        ui.providers.map((conn) => {
+          const isLoading = ui.submittingProvider === conn.identifier;
+          return (
+            <button
+              key={conn.identifier}
+              className={
+                isLoading
+                  ? "eazo-provider-btn eazo-provider-btn-loading"
+                  : "eazo-provider-btn"
+              }
+              onClick={() => handleSocial(conn.identifier)}
+              disabled={submitting}
+            >
+              <span className="eazo-provider-icon">
+                {isLoading ? <div className="eazo-spinner" /> : pickProviderIcon(conn.provider)}
+              </span>
+              <span>Continue with {conn.tooltip?.["en-US"] || conn.name_en || conn.provider}</span>
+            </button>
+          );
+        })
       )}
 
       {!ui.providersLoading ? (

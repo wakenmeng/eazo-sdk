@@ -15,6 +15,8 @@ export interface LoginUIState {
   providersLoading: boolean;
   error: string | null;
   submitting: boolean;
+  /** Identifier of the social provider currently mid-login (for in-button spinner). */
+  submittingProvider: string | null;
 }
 
 const INITIAL_AUTH: AuthState = {
@@ -36,6 +38,7 @@ const INITIAL_LOGIN_UI: LoginUIState = {
   providersLoading: false,
   error: null,
   submitting: false,
+  submittingProvider: null,
 };
 
 export interface ShareUIState {
