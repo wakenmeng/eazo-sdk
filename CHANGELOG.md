@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking — plain-web hosts only)
+
+- **`<EazoProvider>` now wraps host children in a `.eazo-app-area`
+  scroll container on plain-web hosts** so the SDK's `position: fixed`
+  bottom banner can't overlap a host's own bottom-fixed UI (sticky
+  toolbar, glass CTA, mobile tab bar). Host code that does
+  `position: fixed; bottom: 0` now anchors to the wrapper's edge —
+  ABOVE our banner — automatically. **No host changes required for
+  the layout fix itself**, but several `window`-level APIs change
+  behaviour. Activation is scoped to plain-web hosts (gated by the
+  `eazo-host-web` class on `<html>`, set by banner-ui on mount); in
+  the mobile WebView and in embedded iframes the wrapper is rendered
+  as an inert `<div>` and host semantics are unchanged.
+
+  **Why**: pre-existing `<html>` padding compensation only affected
+  flow-layout content. `position: fixed` resolves to the viewport, not
+  the padded `<html>` box, so host's fixed-bottom UI still overlapped
+  our 72-78px bottom banner. The wrapper has `transform: translateZ(0)`
+  which establishes a containing block, so host's `position: fixed`
+  descendants now resolve to the wrapper instead.
+
+  **Affected web APIs on plain-web hosts** (no impact in mobile WebView
+  or iframes):
+
+  | API                                                 | Before                  | After (in `.eazo-app-area`)       |
+  | --------------------------------------------------- | ----------------------- | --------------------------------- |
+  | `window.scrollY` / `window.pageYOffset`             | host content scroll     | always `0`                        |
+  | `window.scrollTo()` / `window.scrollBy()`           | scrolls host content    | no-op                             |
+  | `window.addEventListener('scroll', …)`              | fires on host scroll    | never fires                       |
+  | `document.body.style.overflow = 'hidden'`           | locks scroll            | no effect (body isn't scrolling)  |
+  | Host `position: fixed` (incl. modals at `inset: 0`) | relative to viewport    | contained to wrapper edges        |
+
+  **Migration**:
+
+  - Read the wrapper element when you need the host scroll position:
+    ```js
+    const scroller = document.querySelector(".eazo-app-area");
+    scroller?.addEventListener("scroll", onScroll);
+    scroller?.scrollTo({ top: 0, behavior: "smooth" });
+    ```
+  - Body-scroll-lock: target the wrapper instead of `<body>`. Most
+    modern modal libraries (Radix, Headless UI, etc.) portal to
+    `document.body` and don't need changes; legacy custom modals that
+    set `body.overflow = 'hidden'` do.
+  - `IntersectionObserver`, scroll-container refs, and framework
+    scroll APIs are unaffected.
+
+### Added
+
+- `--eazo-handoff-top` / `--eazo-handoff-bottom` CSS custom properties
+  on `<html>`, set whenever the handoff banners are mounted. Available
+  for host coordination (e.g. anchoring a tooltip just above the bottom
+  banner: `bottom: calc(var(--eazo-handoff-bottom, 0px) + 12px);`).
+- `eazo-host-web` class on `<html>`, set whenever banner-ui mounts in
+  plain-web mode. Internal — the gate for `.eazo-app-area` styles. Host
+  code should not depend on this class.
+
 ## [0.13.0] - 2026-05-08
 
 Bundles the changes intended for 0.12.0 (never published) with the 0.13 work.

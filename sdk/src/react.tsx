@@ -5,6 +5,7 @@ import * as React from "react";
 import { EazoBrandBanner } from "./internal/banner-ui";
 import type { PublicAppInfo } from "./internal/banner-ui/app-info";
 import { setInitialAppInfo } from "./internal/banner-ui/initial-info";
+import { ensureBannerStylesInjected } from "./internal/banner-ui/styles";
 import { getBridge } from "./internal/bootstrap";
 import { _bootstrapAuth } from "./internal/capabilities/auth";
 import { _bootstrapDevice } from "./internal/capabilities/device";
@@ -68,6 +69,14 @@ export function EazoProvider(props: {
   setHostApiBase(props.apiBase ?? null);
   setInitialAppInfo(props.initialAppInfo ?? null);
 
+  // Inject the banner-ui stylesheet eagerly (before EazoBrandBanner mounts)
+  // so the `.eazo-app-area` wrapper around children has its CSS available
+  // on first paint. The banner UI itself injects the same sheet on its
+  // own mount; ensureBannerStylesInjected is idempotent via STYLE_ID.
+  if (typeof document !== "undefined") {
+    ensureBannerStylesInjected();
+  }
+
   React.useEffect(() => {
     // Starting the bridge is idempotent; capability access may have already done so.
     getBridge();
@@ -77,7 +86,37 @@ export function EazoProvider(props: {
 
   return (
     <MountedContext.Provider value={true}>
-      {props.children}
+      {/*
+       * Wrap host children in `.eazo-app-area`. The wrapper element is
+       * ALWAYS rendered so SSR and CSR markup match exactly — but the
+       * styles that change scroll/positioning semantics only activate
+       * when banner-ui adds the `eazo-host-web` class on `<html>`
+       * (post-mount, only in plain-web hosts; never in a mobile WebView
+       * or iframe). See `internal/banner-ui/styles.ts` for the full
+       * rule.
+       *
+       * What the wrapper does on web (active path):
+       *   - `transform: translateZ(0)` establishes a containing block,
+       *     so host's `position: fixed; bottom: 0` resolves to the
+       *     wrapper edge (between the banners) instead of the viewport
+       *     bottom (under our bottom banner). Automatic safe-area.
+       *   - `inset` reads `--eazo-handoff-top|bottom` so the wrapper
+       *     spans exactly the inter-banner gap.
+       *   - The wrapper is the scroll container for host content.
+       *
+       * BREAKING semantics on web that hosts must know about (also in
+       * CHANGELOG):
+       *   - `window.scrollY` / `window` scroll events no longer reflect
+       *     host content scrolling — read from the wrapper element.
+       *   - `document.body { overflow: hidden }` no longer locks scroll.
+       *     Body-scroll-lock libraries must target the wrapper.
+       *   - Host modals at `position: fixed; inset: 0` are contained
+       *     to the wrapper rather than covering the full viewport.
+       *
+       * On mobile WebView / iframe the wrapper is an inert `<div>` with
+       * no special styles — fully transparent to the host.
+       */}
+      <div className="eazo-app-area">{props.children}</div>
       <EazoBrandBanner />
       <LoginUI />
       <ShareDownloadModal />

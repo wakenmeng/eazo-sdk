@@ -164,25 +164,66 @@ export function EazoBrandBanner(): React.ReactElement | null {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [mounted, modalDismissed, modalReady, dismissModal]);
 
-  // Reserve top + bottom space on `<html>` so the host page's own layout
-  // doesn't tuck under the fixed banners. Restored on unmount.
+  // Three coupled responsibilities, all client-side, all keyed to the
+  // banner actually being visible (host === "web", post-mount):
+  //
+  //  1. Reserve top + bottom padding on `<html>` so the host page's
+  //     flow-layout content doesn't tuck under the fixed banners.
+  //
+  //  2. Expose the reserved heights as `--eazo-handoff-top` / `bottom`
+  //     CSS custom properties on `<html>`. The `.eazo-app-area`
+  //     wrapper (rendered by `EazoProvider`) reads these for its inset
+  //     box, and host code can read them too for tooltip / popover
+  //     coordination (e.g. `bottom: calc(var(--eazo-handoff-bottom) + 12px)`).
+  //
+  //  3. Add the `eazo-host-web` class on `<html>`. This is the GATE for
+  //     the `.eazo-app-area` wrapper's effective styling (position:
+  //     fixed + overflow + containing block). The class is only added
+  //     here, not in `react.tsx`, so it's coupled to banner visibility
+  //     — in a mobile WebView or iframe the banner-ui mount-gate above
+  //     bails out and the class is never set, leaving the wrapper as
+  //     an inert pass-through `<div>` that doesn't disturb the host's
+  //     scroll model or fixed-positioning containment.
+  //
+  // All three are restored on unmount so a Provider that comes and
+  // goes leaves no residue.
   React.useEffect(() => {
     if (!mounted) return;
     const html = document.documentElement;
     const previousTop = html.style.paddingTop;
     const previousBottom = html.style.paddingBottom;
+    const previousVarTop = html.style.getPropertyValue("--eazo-handoff-top");
+    const previousVarBottom = html.style.getPropertyValue(
+      "--eazo-handoff-bottom",
+    );
+    html.classList.add("eazo-host-web");
     const apply = (): void => {
       const m = isMobile();
       setMobile(m);
-      html.style.paddingTop = `${topBannerHeightPx(m)}px`;
-      html.style.paddingBottom = `${bottomBannerHeightPx(m)}px`;
+      const top = topBannerHeightPx(m);
+      const bottom = bottomBannerHeightPx(m);
+      html.style.paddingTop = `${top}px`;
+      html.style.paddingBottom = `${bottom}px`;
+      html.style.setProperty("--eazo-handoff-top", `${top}px`);
+      html.style.setProperty("--eazo-handoff-bottom", `${bottom}px`);
     };
     apply();
     window.addEventListener("resize", apply);
     return () => {
       window.removeEventListener("resize", apply);
+      html.classList.remove("eazo-host-web");
       html.style.paddingTop = previousTop;
       html.style.paddingBottom = previousBottom;
+      if (previousVarTop) {
+        html.style.setProperty("--eazo-handoff-top", previousVarTop);
+      } else {
+        html.style.removeProperty("--eazo-handoff-top");
+      }
+      if (previousVarBottom) {
+        html.style.setProperty("--eazo-handoff-bottom", previousVarBottom);
+      } else {
+        html.style.removeProperty("--eazo-handoff-bottom");
+      }
     };
   }, [mounted]);
 

@@ -25,6 +25,70 @@ const TOKENS = `
 `;
 
 export const BANNER_UI_CSS = `
+/* ════════════════════════════════════════════════════════════════════════
+ *  Host content safe area
+ *
+ *  '.eazo-app-area' wraps the host's children at the EazoProvider level.
+ *  The wrapper element is ALWAYS rendered (the markup is static and
+ *  identical across SSR and CSR, so hydration is clean), but the styles
+ *  that change scroll semantics — \`position: fixed\`, \`overflow: auto\`,
+ *  and \`transform: translateZ(0)\` — only apply when the host is a plain
+ *  web browser AND the handoff banners are mounted. We signal that with
+ *  the \`eazo-host-web\` class on \`<html>\`, set/cleared by the banner-ui
+ *  effect.
+ *
+ *  Why scope the styles:
+ *    - The wrapper only EXISTS to keep host content clear of the SDK's
+ *      bottom banner. In a mobile WebView or an embedded iframe, the
+ *      banner doesn't render (banner-ui bails on those hosts), so the
+ *      wrapper's overlap-avoidance has no job. Activating the fixed-
+ *      positioning + overflow + containing-block semantics anyway would
+ *      silently break \`window.scrollY\`, \`window\` scroll listeners,
+ *      \`document.body { overflow: hidden }\` modal locks, and contain
+ *      host modals at \`position: fixed; inset: 0\` — for ZERO product
+ *      benefit in those environments.
+ *    - On plain web (where the banner DOES render and DOES overlap),
+ *      these semantic changes are the price of automatic safe-area
+ *      handling and are documented in CHANGELOG.
+ *
+ *  How the fix works on web:
+ *    - \`transform: translateZ(0)\` makes the wrapper a containing block
+ *      for \`position: fixed\` descendants. A host's own bottom-fixed
+ *      element (sticky toolbar, glass CTA, mobile tab bar) now resolves
+ *      to the wrapper's edge — which sits between the banners — instead
+ *      of the viewport's bottom edge, so it never overlaps the SDK's
+ *      bottom banner.
+ *    - \`inset\` reads the \`--eazo-handoff-top|bottom\` CSS variables
+ *      (set on \`<html>\` by the banner-ui effect) with a \`0px\`
+ *      fallback for the brief frame between mount and effect-run.
+ *
+ *  Known trade-offs on web (called out in CHANGELOG):
+ *    - Scrolling happens inside the wrapper, not on \`window\`. Code
+ *      reading \`window.scrollY\` or attaching \`scroll\` listeners to
+ *      \`window\` must migrate to the wrapper element.
+ *    - \`document.body { overflow: hidden }\` no longer locks scroll
+ *      (the body isn't the scroll container); modal libraries that
+ *      rely on body-scroll-lock must target the wrapper or use a
+ *      portal-friendly lock.
+ *    - Host modals at \`position: fixed; inset: 0\` are contained to
+ *      the wrapper rather than covering the full viewport — visually
+ *      equivalent (the wrapper IS the safe-area box) but \`inset: 0\`
+ *      no longer means "cover everything including the banners".
+ */
+html.eazo-host-web .eazo-app-area {
+  position: fixed;
+  inset: var(--eazo-handoff-top, 0px) 0 var(--eazo-handoff-bottom, 0px) 0;
+  /* overflow-x:hidden so horizontal overflow doesn't bleed past the
+   * wrapper edges into the banner area; overflow-y:auto so the wrapper
+   * is the scroll container for host content. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Establishes a containing block for fixed-positioned descendants —
+   * the entire point of the wrapper. Without this, host's \`position:
+   * fixed; bottom: 0\` resolves to the viewport and overlaps our banner. */
+  transform: translateZ(0);
+}
+
 /* The whole handoff UI lives inside ONE fixed-positioned container that
  * fills the viewport and flex-columns its three children: top banner +
  * overlay (which holds the modal) + bottom banner. This replaces the
