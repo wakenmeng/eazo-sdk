@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-05-21
+
+### Changed
+
+- **Login UI: per-provider in-button spinner.** While a social-login
+  round-trip is in flight, the clicked provider button now shows an
+  inline spinner in its icon slot and keeps full opacity; the other
+  provider buttons stay dimmed at 0.55 opacity. Replaces the previous
+  behaviour where all buttons dimmed equally with no per-button
+  indication of which one was in progress.
+
 ## [0.17.0] - 2026-05-21
 
 ### Changed
