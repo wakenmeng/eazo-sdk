@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-05-23
+
+### Added
+
+- **`share.compose()` now accepts structured image attachments.** Apps can pass
+  `attachments: [{ type: "image", url, caption? }]` so the mobile host receives
+  both the image URL/data URL and a short meaning for each image. The legacy
+  `images` array remains supported for compatibility, with a shared limit of
+  four total image materials.
+- **`share.compose()` now accepts `targetPath`.** Apps can provide an
+  app-relative destination such as `/profile/u_123` or
+  `/result/abc?tab=summary`; mobile can use it to open a published share widget
+  directly into the relevant in-app page instead of only launching the app root.
+
+### Docs
+
+- Documented the share attachment and target-path payload in the SDK README and
+  bridge protocol reference.
+
 ## [0.18.0] - 2026-05-22
 
 ### Changed
