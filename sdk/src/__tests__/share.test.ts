@@ -41,19 +41,60 @@ describe("share.compose — input validation", () => {
     __resetSDK();
   });
 
-  it("rejects when neither text nor images are provided", async () => {
+  it("rejects when no text, attachments, or images are provided", async () => {
     await expect(share.compose({})).rejects.toMatchObject({ code: "INVALID_ARGS" });
   });
 
-  it("rejects when more than 4 images are provided", async () => {
+  it("rejects when more than 4 total image materials are provided", async () => {
     await expect(
       share.compose({ images: ["a", "b", "c", "d", "e"] }),
     ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({
+        attachments: [
+          { type: "image", url: "https://x.test/a.png" },
+          { type: "image", url: "https://x.test/b.png" },
+        ],
+        images: ["c", "d", "e"],
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+  });
+
+  it("does not double-count the same image URL across attachments and legacy images", async () => {
+    const promise = share.compose({
+      attachments: [
+        { type: "image", url: "https://x.test/a.png" },
+        { type: "image", url: "https://x.test/b.png" },
+      ],
+      images: [
+        "https://x.test/a.png",
+        "https://x.test/c.png",
+        "https://x.test/d.png",
+      ],
+    });
+    await new Promise((r) => setTimeout(r, 1700));
+    await expect(promise).resolves.toEqual({ accepted: false });
   });
 
   it("rejects when an image entry is empty/non-string", async () => {
     await expect(
-      share.compose({ images: ["", "https://x.test/img.png"] }),
+      share.compose({ images: ["   ", "https://x.test/img.png"] }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+  });
+
+  it("rejects malformed attachments", async () => {
+    await expect(
+      share.compose({ attachments: [{ type: "image", url: "   " }] }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({
+        attachments: [{ type: "file" as "image", url: "https://x.test/a.png" }],
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({
+        attachments: [{ type: "image", url: "https://x.test/a.png", caption: 123 as never }],
+      }),
     ).rejects.toMatchObject({ code: "INVALID_ARGS" });
   });
 });
@@ -76,7 +117,9 @@ describe("share.compose — mobile bridge path", () => {
     // Trigger bootstrap (waitForBootstrap inside compose() will await hello)
     const promise = share.compose({
       text: " hi there ",
-      images: ["https://x.test/a.png"],
+      attachments: [
+        { type: "image", url: "https://x.test/a.png", caption: " hero image " },
+      ],
       sourceAppId: "todo-reminder",
     });
 
@@ -91,8 +134,11 @@ describe("share.compose — mobile bridge path", () => {
     expect(reqEnvelope).toBeDefined();
     // text trimmed by normalize()
     expect((reqEnvelope?.args as { text: string }).text).toBe("hi there");
-    expect((reqEnvelope?.args as { images: string[] }).images).toEqual([
-      "https://x.test/a.png",
+    expect(
+      (reqEnvelope?.args as { attachments: Array<{ type: string; url: string; caption?: string }> })
+        .attachments,
+    ).toEqual([
+      { type: "image", url: "https://x.test/a.png", caption: "hero image" },
     ]);
     expect((reqEnvelope?.args as { sourceAppId: string }).sourceAppId).toBe(
       "todo-reminder",

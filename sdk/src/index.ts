@@ -16,8 +16,10 @@ export type {
   ChatCompletionCreateParamsStreaming,
 } from "./internal/capabilities/ai";
 export type {
+  ShareAttachment,
   ShareComposeInput,
   ShareComposeResult,
+  ShareImageAttachment,
 } from "./internal/capabilities/share";
 export type { NotificationsSubscriptionResult } from "./internal/capabilities/notifications";
 export type {

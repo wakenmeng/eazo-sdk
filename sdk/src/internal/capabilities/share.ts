@@ -8,13 +8,31 @@ export function getShareDownloadUrl(): string {
   return `${getPlatformApiBase()}/`;
 }
 
+export interface ShareImageAttachment {
+  type: "image";
+  /**
+   * Either an `https://...` URL or a
+   * `data:image/(png|jpeg|webp|gif);base64,...` data URL. The host uploads
+   * any data URLs server-side before drafting.
+   */
+  url: string;
+  /** Short app-provided meaning for the image, e.g. "profile avatar". */
+  caption?: string;
+}
+
+export type ShareAttachment = ShareImageAttachment;
+
 export interface ShareComposeInput {
   /** Free-form text the app wants to seed the post with. */
   text?: string;
   /**
-   * Up to 4 images. Each item is either an `https://...` URL or a
-   * `data:image/(png|jpeg|webp|gif);base64,...` data URL. The host
-   * uploads any data URLs server-side before drafting.
+   * Flexible share materials. First version supports image attachments only.
+   * Use captions to tell the host what each image represents.
+   */
+  attachments?: ShareAttachment[];
+  /**
+   * Legacy image list. Prefer `attachments` for new code so images can carry
+   * a small caption/meaning.
    */
   images?: string[];
   /**
@@ -44,25 +62,68 @@ function validate(input: ShareComposeInput): void {
     throw new BridgeErrorObject("INVALID_ARGS", "share.compose requires an input object");
   }
   const hasText = typeof input.text === "string" && input.text.trim().length > 0;
+  const hasAttachments = Array.isArray(input.attachments) && input.attachments.length > 0;
   const hasImages = Array.isArray(input.images) && input.images.length > 0;
-  if (!hasText && !hasImages) {
+  if (!hasText && !hasAttachments && !hasImages) {
     throw new BridgeErrorObject(
       "INVALID_ARGS",
-      "share.compose requires at least one of `text` or `images`",
+      "share.compose requires at least one of `text`, `attachments`, or `images`",
     );
   }
-  if (Array.isArray(input.images)) {
-    if (input.images.length > MAX_IMAGES) {
-      throw new BridgeErrorObject(
-        "INVALID_ARGS",
-        `share.compose accepts at most ${MAX_IMAGES} images`,
-      );
+  if (input.attachments !== undefined) {
+    if (!Array.isArray(input.attachments)) {
+      throw new BridgeErrorObject("INVALID_ARGS", "share.compose `attachments` must be an array");
     }
+    for (const attachment of input.attachments) {
+      if (!attachment || typeof attachment !== "object") {
+        throw new BridgeErrorObject(
+          "INVALID_ARGS",
+          "share.compose attachments must be objects",
+        );
+      }
+      if ((attachment as { type?: unknown }).type !== "image") {
+        throw new BridgeErrorObject(
+          "INVALID_ARGS",
+          "share.compose attachments currently support only type \"image\"",
+        );
+      }
+      if (typeof attachment.url !== "string" || attachment.url.trim().length === 0) {
+        throw new BridgeErrorObject(
+          "INVALID_ARGS",
+          "share.compose image attachment URLs must be non-empty strings",
+        );
+      }
+      if (attachment.caption !== undefined && typeof attachment.caption !== "string") {
+        throw new BridgeErrorObject(
+          "INVALID_ARGS",
+          "share.compose image attachment captions must be strings",
+        );
+      }
+    }
+  }
+  if (Array.isArray(input.images)) {
     for (const url of input.images) {
-      if (typeof url !== "string" || url.length === 0) {
+      if (typeof url !== "string" || url.trim().length === 0) {
         throw new BridgeErrorObject("INVALID_ARGS", "share.compose images must be non-empty strings");
       }
     }
+  }
+  const imageUrls = new Set<string>();
+  if (Array.isArray(input.attachments)) {
+    for (const attachment of input.attachments) {
+      imageUrls.add(attachment.url.trim());
+    }
+  }
+  if (Array.isArray(input.images)) {
+    for (const image of input.images) {
+      imageUrls.add(image.trim());
+    }
+  }
+  if (imageUrls.size > MAX_IMAGES) {
+    throw new BridgeErrorObject(
+      "INVALID_ARGS",
+      `share.compose accepts at most ${MAX_IMAGES} image attachments`,
+    );
   }
 }
 
@@ -72,8 +133,18 @@ function normalize(input: ShareComposeInput): ShareComposeInput {
     const trimmed = input.text.trim();
     if (trimmed.length > 0) out.text = trimmed;
   }
+  if (Array.isArray(input.attachments) && input.attachments.length > 0) {
+    out.attachments = input.attachments.map((attachment) => {
+      const caption = attachment.caption?.trim();
+      return {
+        type: "image",
+        url: attachment.url.trim(),
+        ...(caption ? { caption } : {}),
+      };
+    });
+  }
   if (Array.isArray(input.images) && input.images.length > 0) {
-    out.images = input.images.slice();
+    out.images = input.images.map((url) => url.trim());
   }
   if (typeof input.sourceAppId === "string" && input.sourceAppId.trim().length > 0) {
     out.sourceAppId = input.sourceAppId.trim();
@@ -91,8 +162,9 @@ export const share = {
    * - **In a plain browser** the SDK shows a "Continue in the Eazo app"
    *   modal pointing to https://eazo.ai/. Resolves `{ accepted: false }`.
    *
-   * Throws `BridgeError('INVALID_ARGS')` synchronously when neither `text`
-   * nor `images` are provided, or when more than 4 images are passed.
+   * Throws `BridgeError('INVALID_ARGS')` synchronously when none of `text`,
+   * `attachments`, or `images` are provided, or when more than 4 total image
+   * materials are passed.
    */
   async compose(input: ShareComposeInput): Promise<ShareComposeResult> {
     validate(input);
