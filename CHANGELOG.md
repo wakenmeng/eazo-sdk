@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-05-22
+
+### Changed
+
+- **Handoff modal: scannable QR moves to the orbit center, app logo
+  moves to the CTA-row tile.** Previously the orbit's center carried
+  the app's logo (`Monolith`) and the CTA row carried the QR. They've
+  swapped on desktop — the QR is the primary visual now, sized to
+  144px (up from 88px in the CTA tile), so a desktop user with a
+  phone in hand can scan from across the room. The app's logo lives
+  in the CTA-row tile at 72px. Mobile still shows the logo at orbit
+  center (asking a phone user to scan their own screen is silly) and
+  the CTA row stays collapsed to a single button.
+
+- **QR now embeds the app's icon at its center.** Purely cosmetic
+  branding. `QrSvg` accepts `logoUrl` (http/data URL) or `logoGlyph`
+  (emoji / initials) and automatically upgrades the ECC level from
+  `M` to `H` (~30% damage tolerance) when a logo is present so the
+  masked region still scans cleanly. A failed image load silently
+  degrades to glyph or to no logo. New props are additive — existing
+  `QrSvg` callers are unaffected.
+
+- **Orbit geometry expanded.** Capability-node track radius pushed
+  from 102 → 116 so the larger center QR has ~18px of clearance to
+  the nearest node (was ~4px). Outer ring expanded 132 → 138 in
+  proportion. The inner coral guide ring was dropped — at the new
+  geometry its arcs visually grazed the QR's white tile.
+
+- **`Monolith` accepts an optional `size` prop.** Used by the
+  CTA-row instance to render at 72px; the orbit-center instance
+  omits it and keeps the responsive CSS sizing (96 desktop /
+  76 mobile) it had before.
+
 ## [0.17.2] - 2026-05-21
 
 ### Docs
