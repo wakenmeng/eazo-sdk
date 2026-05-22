@@ -10,6 +10,7 @@ Eazo 平台应用的官方 SDK。
 
 - `auth` — 统一登录流程（浏览器内走 SDK 自带 UI，Eazo Mobile 下委托给宿主原生登录）、会话管理、用户资料、token 获取
 - `device` — 运行时上下文（platform / locale / safe area / backend URL）
+- `share` — 把文字、图片附件和可选 App 内目标路径交给 Eazo Mobile 的发帖编辑器
 - `useEazo(selector)` — 基于 `useSyncExternalStore` 的 React 集成
 - `requireAuth` — 服务端 Next.js API route 的解密与鉴权守卫
 - 内置 ECC secp256k1 + AES-256-GCM 混合加密用于 session token

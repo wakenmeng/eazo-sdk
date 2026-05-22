@@ -4,6 +4,7 @@ import { BridgeErrorObject, SHARE_COMPOSE } from "../bridge/protocol";
 import { setShareUI } from "../store";
 
 const MAX_IMAGES = 4;
+const MAX_TARGET_PATH_LENGTH = 512;
 export function getShareDownloadUrl(): string {
   return `${getPlatformApiBase()}/`;
 }
@@ -42,6 +43,12 @@ export interface ShareComposeInput {
    * The host uses this to attach an "app mention" pill to the post.
    */
   sourceAppId?: string;
+  /**
+   * Optional app-internal destination opened when a published share widget is
+   * tapped. Must be a relative path inside the source app, e.g.
+   * `/profile/u_123` or `/result/abc?tab=summary`. Absolute URLs are rejected.
+   */
+  targetPath?: string;
 }
 
 export interface ShareComposeResult {
@@ -125,6 +132,36 @@ function validate(input: ShareComposeInput): void {
       `share.compose accepts at most ${MAX_IMAGES} image attachments`,
     );
   }
+  if (input.targetPath !== undefined) {
+    if (typeof input.targetPath !== "string") {
+      throw new BridgeErrorObject("INVALID_ARGS", "share.compose `targetPath` must be a string");
+    }
+    const targetPath = input.targetPath.trim();
+    if (targetPath.length > 0) {
+      validateTargetPath(targetPath);
+    }
+  }
+}
+
+function validateTargetPath(targetPath: string): void {
+  if (targetPath.length > MAX_TARGET_PATH_LENGTH) {
+    throw new BridgeErrorObject(
+      "INVALID_ARGS",
+      `share.compose targetPath must be ${MAX_TARGET_PATH_LENGTH} characters or fewer`,
+    );
+  }
+  if (!targetPath.startsWith("/") || targetPath.startsWith("//")) {
+    throw new BridgeErrorObject(
+      "INVALID_ARGS",
+      "share.compose targetPath must be an app-relative path starting with `/`",
+    );
+  }
+  if (/[\u0000-\u001f\u007f]/.test(targetPath)) {
+    throw new BridgeErrorObject(
+      "INVALID_ARGS",
+      "share.compose targetPath must not contain control characters",
+    );
+  }
 }
 
 function normalize(input: ShareComposeInput): ShareComposeInput {
@@ -148,6 +185,9 @@ function normalize(input: ShareComposeInput): ShareComposeInput {
   }
   if (typeof input.sourceAppId === "string" && input.sourceAppId.trim().length > 0) {
     out.sourceAppId = input.sourceAppId.trim();
+  }
+  if (typeof input.targetPath === "string" && input.targetPath.trim().length > 0) {
+    out.targetPath = input.targetPath.trim();
   }
   return out;
 }

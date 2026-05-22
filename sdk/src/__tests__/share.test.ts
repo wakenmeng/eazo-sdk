@@ -97,6 +97,24 @@ describe("share.compose — input validation", () => {
       }),
     ).rejects.toMatchObject({ code: "INVALID_ARGS" });
   });
+
+  it("rejects targetPath values outside the source app", async () => {
+    await expect(
+      share.compose({ text: "hi", targetPath: "profile/u_1" }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({ text: "hi", targetPath: "//evil.test/profile" }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({ text: "hi", targetPath: "https://evil.test/profile" }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({ text: "hi", targetPath: `/profile/${"x".repeat(520)}` }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+    await expect(
+      share.compose({ text: "hi", targetPath: "/profile/u_1\nnext" }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGS" });
+  });
 });
 
 describe("share.compose — mobile bridge path", () => {
@@ -121,6 +139,7 @@ describe("share.compose — mobile bridge path", () => {
         { type: "image", url: "https://x.test/a.png", caption: " hero image " },
       ],
       sourceAppId: "todo-reminder",
+      targetPath: " /profile/u_123?tab=works ",
     });
 
     // Give the bridge a tick to attach
@@ -142,6 +161,9 @@ describe("share.compose — mobile bridge path", () => {
     ]);
     expect((reqEnvelope?.args as { sourceAppId: string }).sourceAppId).toBe(
       "todo-reminder",
+    );
+    expect((reqEnvelope?.args as { targetPath: string }).targetPath).toBe(
+      "/profile/u_123?tab=works",
     );
 
     __dispatchHostMessage({
