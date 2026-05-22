@@ -509,6 +509,22 @@ html.eazo-host-web .eazo-app-area-scroller {
 }
 .eazo-monolith-img.is-loaded { opacity: 1; }
 
+/* Orbit-center QR tile (desktop only). Wraps the QR SVG in a white
+ * card so it reads as an intentional center piece rather than floating
+ * pixels — same shadow + hairline language as the monolith it replaced,
+ * scaled down slightly. Mobile keeps the monolith at orbit center
+ * (asking a phone user to scan their own screen is silly), so no mobile
+ * sizing is needed here. */
+.eazo-orbit-qr {
+  padding: 8px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--eazo-hair);
+  box-shadow:
+    0 22px 44px -18px rgba(17,19,15,0.18),
+    0 0 0 1px rgba(255,255,255,0.14);
+}
+
 /* ============ QR + CTA ROW ============ */
 .eazo-cta-row {
   width: 100%; display: flex; gap: 12px; align-items: stretch; margin-top: 6px;

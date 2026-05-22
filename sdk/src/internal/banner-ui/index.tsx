@@ -149,7 +149,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
     if (!mounted) return;
     const timer = window.setTimeout(() => {
       setModalReady(true);
-    }, MODAL_DELAY_MS);
+    }, 2);
     return () => window.clearTimeout(timer);
   }, [mounted]);
 
@@ -271,6 +271,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
           cta={cta}
           loading={loading}
           pageUrl={pageUrl}
+          mobile={mobile}
           onDismiss={dismissModal}
         />
       )}
@@ -429,11 +430,17 @@ interface OverlayProps {
   info: PublicAppInfo | null;
   loading: boolean;
   pageUrl: string;
+  /**
+   * True at viewport widths <= MOBILE_BREAKPOINT_PX. Drives the
+   * Orbit-center swap (QR on desktop / logo on mobile — no point asking
+   * a phone user to scan their own screen).
+   */
+  mobile: boolean;
   /** Hides the modal for the rest of the tab session. */
   onDismiss: () => void;
 }
 
-function Overlay({ cta, info, loading, pageUrl, onDismiss }: OverlayProps): React.ReactElement {
+function Overlay({ cta, info, loading, pageUrl, mobile, onDismiss }: OverlayProps): React.ReactElement {
   const onClick = React.useMemo(() => bindCtaClick(cta), [cta]);
   // While loading we still want SOMETHING in the monolith; initials of
   // "Eazo app" reads better than a literal placeholder. Once `info`
@@ -468,7 +475,10 @@ function Overlay({ cta, info, loading, pageUrl, onDismiss }: OverlayProps): Reac
         <Orbit
           initials={iconGlyph ?? initials}
           iconUrl={iconUrl}
+          iconGlyph={iconGlyph}
+          pageUrl={pageUrl}
           loading={loading}
+          mobile={mobile}
         />
 
         <div className="eazo-modal-eyebrow">Now showing in Eazo</div>
@@ -504,11 +514,20 @@ function Overlay({ cta, info, loading, pageUrl, onDismiss }: OverlayProps): Reac
 
         <div className="eazo-cta-row">
           <div className="eazo-qr-tile">
-            {/* QR encodes the page's own URL. A desktop user scanning
-             * with their phone lands on the same page on mobile — the
-             * SDK then routes the user into the native app via the
-             * mobile path's deep link, or the App Store fallback. */}
-            {pageUrl ? <QrSvg value={pageUrl} size={88} /> : null}
+            {/* App logo lives in the CTA row now — the orbit's center
+             * carries the scannable QR. Reuses `.eazo-qr-tile` because
+             * the chrome (white tile, rounded corners, hairline border,
+             * mobile `display:none`) is identical to what the QR needed;
+             * the className name is slightly stale but renaming it is
+             * pure churn. `Monolith` keeps its existing 3-state machine
+             * (shimmer / image / initials fallback) and just renders at
+             * a smaller fixed size. */}
+            <Monolith
+              initials={iconGlyph ?? initials}
+              iconUrl={iconUrl}
+              loading={loading}
+              size={72}
+            />
           </div>
           <div className="eazo-cta-body">
             <div>
@@ -540,11 +559,38 @@ function Overlay({ cta, info, loading, pageUrl, onDismiss }: OverlayProps): Reac
 interface OrbitProps {
   initials: string;
   iconUrl?: string;
+  /**
+   * Emoji / short glyph (when `creator_apps.icon` is text, not a URL).
+   * Forwarded to the QR's center logo on desktop and used in place of
+   * `iconUrl` when none is available.
+   */
+  iconGlyph?: string;
+  /**
+   * Current page URL — encoded by the QR at the orbit's center on
+   * desktop. Empty during the first render tick before the mount
+   * effect resolves; the orbit still renders, just without the center
+   * piece until it arrives.
+   */
+  pageUrl: string;
   /** True while the app-info fetch is in flight — drives the monolith shimmer. */
   loading?: boolean;
+  /**
+   * Viewport-width gate. Desktop puts the scannable QR at orbit center
+   * (point of a desktop user being able to whip out their phone); mobile
+   * falls back to the app logo monolith — asking a phone user to scan
+   * their own screen is silly.
+   */
+  mobile?: boolean;
 }
 
-function Orbit({ initials, iconUrl, loading = false }: OrbitProps): React.ReactElement {
+function Orbit({
+  initials,
+  iconUrl,
+  iconGlyph,
+  pageUrl,
+  loading = false,
+  mobile = false,
+}: OrbitProps): React.ReactElement {
   // All geometry runs in a 280-unit coordinate space. The SVG uses
   // `viewBox` so its rings scale to whatever pixel size the parent is
   // (280 desktop / 220 mobile). The capability nodes are positioned via
@@ -553,7 +599,12 @@ function Orbit({ initials, iconUrl, loading = false }: OrbitProps): React.ReactE
   // colliding with the track's rotate animation, unlike a transform
   // would).
   const SIDE = 280;
-  const RADIUS = 102;
+  // Capability-node track radius. Pushed out from the original 102 to
+  // give the 144px center QR more breathing room — node inner edge sits
+  // at `RADIUS - 18` (node is 36px), so the QR (80px half-width incl.
+  // tile padding) now has ~18px of clearance instead of ~4px. Capped
+  // by `CENTER - 18 = 122` to keep nodes inside the orbit box.
+  const RADIUS = 116;
   const CENTER = SIDE / 2;
   // Radius as a percentage of half the box — used to convert polar
   // coordinates to percentage `left/top` on the track.
@@ -567,9 +618,14 @@ function Orbit({ initials, iconUrl, loading = false }: OrbitProps): React.ReactE
         preserveAspectRatio="xMidYMid meet"
         aria-hidden="true"
       >
-        <circle cx={CENTER} cy={CENTER} r={132} fill="none" stroke="rgba(17,19,15,0.06)" />
-        <circle cx={CENTER} cy={CENTER} r={102} fill="none" stroke="rgba(17,19,15,0.08)" strokeDasharray="2 6" />
-        <circle cx={CENTER} cy={CENTER} r={74} fill="none" stroke="rgba(212,97,74,0.30)" />
+        {/* Two concentric guide rings. Outer ring hugs the orbit
+         * frame; middle dashed ring sits exactly on the node track
+         * (matches `RADIUS`). The inner coral ring was dropped — at
+         * r=88 its arcs visually grazed the 144px QR's white tile,
+         * which read as "ring cutting through the QR" even though it
+         * was geometrically clear of the QR pixels. */}
+        <circle cx={CENTER} cy={CENTER} r={138} fill="none" stroke="rgba(17,19,15,0.06)" />
+        <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="rgba(17,19,15,0.08)" strokeDasharray="2 6" />
       </svg>
       <div className="eazo-orbit-track">
         {CAPABILITIES.map((c, i) => {
@@ -590,7 +646,31 @@ function Orbit({ initials, iconUrl, loading = false }: OrbitProps): React.ReactE
           );
         })}
       </div>
-      <Monolith initials={initials} iconUrl={iconUrl} loading={loading} />
+      {mobile ? (
+        // Phone user can't usefully scan their own screen — show the
+        // app logo at orbit center instead. CSS already adapts the
+        // monolith's CSS size for the mobile media query (96 → 76).
+        <Monolith initials={initials} iconUrl={iconUrl} loading={loading} />
+      ) : pageUrl ? (
+        // Desktop center is the scannable QR — pop your phone over the
+        // screen and the SDK on the phone side does the handoff. The
+        // app's icon embeds in the QR center as branding (ECC bumps to
+        // H automatically so the masked area still scans).
+        <div className="eazo-orbit-qr">
+          {/* Sized to fill as much of the orbit's inner ring as
+           * possible without colliding with the capability nodes.
+           * Capability ring radius is 102 (per the SVG above) and each
+           * node is 36px, so node inner-edge sits 84px from center —
+           * 144px QR + 8px tile padding = 80px half-width, leaving a
+           * 4px gap. Bump either value with care. */}
+          <QrSvg
+            value={pageUrl}
+            size={144}
+            logoUrl={iconUrl}
+            logoGlyph={iconUrl ? undefined : iconGlyph}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -610,9 +690,16 @@ interface MonolithProps {
   initials: string;
   iconUrl?: string;
   loading: boolean;
+  /**
+   * Override the CSS-driven monolith size (96 desktop / 76 mobile).
+   * The CTA-row "small logo" instance passes 72 so it sits cleanly
+   * inside its 88px tile; the orbit-center instance omits this so
+   * the responsive CSS sizing applies as before.
+   */
+  size?: number;
 }
 
-function Monolith({ initials, iconUrl, loading }: MonolithProps): React.ReactElement {
+function Monolith({ initials, iconUrl, loading, size }: MonolithProps): React.ReactElement {
   type ImgState = "pending" | "loaded" | "errored";
   const [imgState, setImgState] = React.useState<ImgState>(
     iconUrl ? "pending" : "loaded",
@@ -630,8 +717,21 @@ function Monolith({ initials, iconUrl, loading }: MonolithProps): React.ReactEle
   // and either no URL or the URL failed to load.
   const showText = !loading && !hasUsableImg;
 
+  // When `size` is supplied, override the CSS-driven width/height and
+  // proportionally scale the typographic fallback + corner radius so
+  // the small variant in the CTA row reads as the same component, just
+  // shrunk. When omitted, the CSS sizing for desktop/mobile applies.
+  const overrideStyle = size
+    ? {
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.45),
+        borderRadius: Math.round(size * 0.22),
+      }
+    : undefined;
+
   return (
-    <div className="eazo-monolith" aria-hidden="true">
+    <div className="eazo-monolith" style={overrideStyle} aria-hidden="true">
       {hasUsableImg ? (
         <img
           className={`eazo-monolith-img${imgState === "loaded" ? " is-loaded" : ""}`}
