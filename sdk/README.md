@@ -108,12 +108,15 @@ await share.compose({
     },
   ],
   sourceAppId: "recipe-keeper",             // optional attribution
+  targetPath: "/recipes/carbonara-42",       // optional app-internal destination
 });
 // → { accepted: true } in the mobile app
 // → { accepted: false } on the web (download CTA shown)
 ```
 
 `attachments` currently supports image attachments only. Pass up to 4 total image materials. `images: string[]` is still accepted for legacy apps, but new code should prefer `attachments` so images can carry a short caption/meaning.
+
+`targetPath` is optional and tells Eazo Mobile where to open the source app when someone taps the published share widget. It must be a relative path inside the source app, such as `/profile/u_123` or `/result/abc?tab=summary`; absolute URLs are rejected.
 
 `share.compose` throws `INVALID_ARGS` synchronously if none of `text`, `attachments`, or `images` is provided, or if more than 4 total image materials are passed.
 
