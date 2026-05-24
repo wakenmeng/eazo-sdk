@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-05-23
+
+### Fixed
+
+- **Restored the 60-second handoff modal delay.** A debug value
+  (`2ms`) had been left in the `setTimeout` driving `modalReady`,
+  which defeated the entire delay gate and caused the center
+  handoff modal to pop on first paint instead of after the
+  intended grace period. Restored to `MODAL_DELAY_MS` (60_000ms).
+
 ## [0.19.0] - 2026-05-23
 
 ### Added
