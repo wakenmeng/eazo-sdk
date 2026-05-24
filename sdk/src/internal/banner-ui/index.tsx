@@ -149,7 +149,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
     if (!mounted) return;
     const timer = window.setTimeout(() => {
       setModalReady(true);
-    }, 2);
+    }, MODAL_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [mounted]);
 
