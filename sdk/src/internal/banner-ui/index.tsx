@@ -28,11 +28,11 @@ import {
 // store. Matches the value in `store-links.ts`.
 const IOS_FALLBACK_TIMEOUT_MS = 1500;
 const MOBILE_BREAKPOINT_PX = 480;
-// Delay before the center handoff modal appears — gives users a minute
-// to actually use the app before the strong CTA pops up. The top banner
-// stays visible from first paint; this only gates the center "Open in
-// Eazo app" modal.
-const MODAL_DELAY_MS = 60_000;
+// The center handoff modal pops immediately on load. After the user
+// dismisses it (X / ESC), it re-arms and pops again this long later —
+// repeating for each dismiss. The top banner stays visible throughout;
+// this only paces the center "Open in Eazo app" modal.
+const MODAL_REOPEN_DELAY_MS = 30_000;
 
 function isMobile(): boolean {
   if (typeof window === "undefined") return false;
@@ -109,16 +109,15 @@ export function EazoBrandBanner(): React.ReactElement | null {
   // is already in hand — no fetch is going to fire.
   const [loading, setLoading] = React.useState(() => getInitialAppInfo() === null);
   const [mobile, setMobile] = React.useState(false);
-  // In-memory dismiss for the strong-CTA modal — intentionally NOT
-  // persisted. Every page load (navigation, refresh, new tab) re-engages
-  // the modal; the X / ESC just hides it for the current session of this
-  // page. The top + bottom banners stay regardless.
-  const [modalDismissed, setModalDismissed] = React.useState(false);
-  // Gate the modal behind a delay so users get to use the app for a
-  // minute before the strong CTA interrupts them. Flips once on mount;
-  // dismiss state above overrides this — once closed, the modal stays
-  // closed for this page load even if the timer hasn't fired yet.
-  const [modalReady, setModalReady] = React.useState(false);
+  // Visibility of the strong-CTA modal. Opens immediately on load;
+  // dismissing (X / ESC) hides it and arms a timer to re-open it
+  // MODAL_REOPEN_DELAY_MS later, repeating for each dismiss. Intentionally
+  // NOT persisted — every page load re-engages the modal. The top banner
+  // stays visible regardless.
+  const [modalOpen, setModalOpen] = React.useState(true);
+  // Holds the pending re-open timer so a fresh dismiss can reset it and
+  // unmount can clear it (no leaked timer re-rendering a stale Provider).
+  const reopenTimerRef = React.useRef<number | null>(null);
   // Resolved on mount in the browser. Encoded by the QR so a desktop
   // scan opens the EXACT page on a phone (which then sends the user
   // through the same handoff via the mobile route).
@@ -133,32 +132,41 @@ export function EazoBrandBanner(): React.ReactElement | null {
     setMounted(true);
   }, []);
 
+  // Hide the modal and arm a timer to bring it back MODAL_REOPEN_DELAY_MS
+  // later. A new dismiss resets any pending timer so the delay is always
+  // measured from the most recent close.
   const dismissModal = React.useCallback(() => {
-    setModalDismissed(true);
+    setModalOpen(false);
+    if (reopenTimerRef.current !== null) {
+      window.clearTimeout(reopenTimerRef.current);
+    }
+    reopenTimerRef.current = window.setTimeout(() => {
+      reopenTimerRef.current = null;
+      setModalOpen(true);
+    }, MODAL_REOPEN_DELAY_MS);
   }, []);
 
-  // Flip `modalReady` after MODAL_DELAY_MS so the strong CTA only
-  // appears once the user has had time to engage with the app. Cleaned
-  // up on unmount so a quick navigation doesn't leak a timer that
-  // re-renders the (now stale) Provider.
+  // Clear any pending re-open timer on unmount so a quick navigation
+  // doesn't leak a timer that re-renders the (now stale) Provider.
   React.useEffect(() => {
-    if (!mounted) return;
-    const timer = window.setTimeout(() => {
-      setModalReady(true);
-    }, MODAL_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [mounted]);
+    return () => {
+      if (reopenTimerRef.current !== null) {
+        window.clearTimeout(reopenTimerRef.current);
+        reopenTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // ESC closes the modal — same dismiss path as the X button. Only
-  // armed while the modal is actually rendered.
+  // armed while the modal is actually showing.
   React.useEffect(() => {
-    if (!mounted || modalDismissed || !modalReady) return;
+    if (!mounted || !modalOpen) return;
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === "Escape") dismissModal();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [mounted, modalDismissed, modalReady, dismissModal]);
+  }, [mounted, modalOpen, dismissModal]);
 
   // Three coupled responsibilities, all client-side, all keyed to the
   // banner actually being visible (host === "web", post-mount):
@@ -266,7 +274,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
         info={info}
         loading={loading}
       />
-      {modalDismissed || !modalReady ? null : (
+      {modalOpen ? (
         <Overlay
           info={info}
           cta={cta}
@@ -275,7 +283,7 @@ export function EazoBrandBanner(): React.ReactElement | null {
           mobile={mobile}
           onDismiss={dismissModal}
         />
-      )}
+      ) : null}
     </div>
   );
 }
