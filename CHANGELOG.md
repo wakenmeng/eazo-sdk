@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-11
+
 ### Changed
 
 - **`memory.reportAction()` now respects the app author's "share anonymized
@@ -22,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Older SDKs ignore the new field. The server-side `POST /api/open/gum/action`
   endpoint enforces the same gate as a second layer, returning `200` without
   writing to Gum when the app has consent disabled.
+- **Web handoff consolidated into a single top banner.** The separate bottom
+  banner is gone; the app identity (icon + name), the likes/comments rail,
+  and the Remix + "Open in Eazo" CTAs now live on one row. The SDK no longer
+  reserves bottom padding on `<html>` (`--eazo-handoff-bottom` is pinned to
+  `0px`, still published for host code reading it).
+- **Handoff modal now pops immediately on load and re-arms 30s after dismiss**
+  (previously a one-time 60s delay). Dismissing it (X / ESC) hides it and
+  brings it back 30 seconds later, repeating for each dismiss.
+- **Top-banner CTAs reworked.** The handoff CTA is relabeled "Open in app" →
+  "Open in Eazo"; Remix is now the primary coral CTA and falls back to the web
+  creator portal (`https://creator.eazo.ai/`) when the Eazo app doesn't open,
+  instead of the store / marketing site.
+
+### Fixed
+
+- **Recovered the stuck social-login spinner.** When a user dismissed the
+  Authing OAuth popup without completing, neither callback fired and the
+  in-button spinner hung forever. The login UI now resets in-flight state on
+  open/close and detects a dismissed popup via the window blur→focus signal,
+  clearing the spinner so the user can retry.
 
 ## [0.19.1] - 2026-05-23
 
