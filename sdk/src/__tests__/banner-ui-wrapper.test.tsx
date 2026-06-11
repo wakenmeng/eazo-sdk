@@ -194,9 +194,12 @@ describe("EazoProvider .eazo-app-area wrapper", () => {
     const html = document.documentElement;
     expect(html.classList.contains("eazo-host-web")).toBe(true);
     expect(html.style.paddingTop).not.toBe("");
-    expect(html.style.paddingBottom).not.toBe("");
+    // No bottom banner anymore → no bottom padding is reserved, but the
+    // `--eazo-handoff-bottom` var is still published (pinned to 0px) so
+    // host code reading it without a fallback gets a valid length.
+    expect(html.style.paddingBottom).toBe("");
     expect(html.style.getPropertyValue("--eazo-handoff-top")).not.toBe("");
-    expect(html.style.getPropertyValue("--eazo-handoff-bottom")).not.toBe("");
+    expect(html.style.getPropertyValue("--eazo-handoff-bottom")).toBe("0px");
 
     unmount();
     expect(html.classList.contains("eazo-host-web")).toBe(false);

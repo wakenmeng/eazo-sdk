@@ -2,14 +2,13 @@ import { getHost } from "../env";
 
 const STYLE_ID = "eazo-sdk-banner-ui";
 
-export const BANNER_HEIGHT_DESKTOP = 52;
-export const BANNER_HEIGHT_MOBILE = 56;
-/* Sized so the V5 / M5 bottom banner fits a 44px coral pill plus the
- * design's 14 / 22-px breathing pad. Bumping these here also bumps the
- * `<html>` padding-bottom the SDK reserves (see banner-ui/index.tsx),
- * so the host page never tucks under the banner. */
-export const BOTTOM_HEIGHT_DESKTOP = 72;
-export const BOTTOM_HEIGHT_MOBILE = 78;
+/* The top banner now carries the app identity (icon + name), the
+ * likes/comments rail, and both CTAs on a single row — so it's a touch
+ * taller than the old slim copy strip. These values also drive the
+ * `<html>` padding-top the SDK reserves (see banner-ui/index.tsx), so
+ * the host page never tucks under the banner. */
+export const BANNER_HEIGHT_DESKTOP = 58;
+export const BANNER_HEIGHT_MOBILE = 60;
 
 const TOKENS = `
   --eazo-cream: #f1ebe0;
@@ -149,20 +148,20 @@ html.eazo-host-web .eazo-app-area-scroller {
 }
 
 /* The whole handoff UI lives inside ONE fixed-positioned container that
- * fills the viewport and flex-columns its three children: top banner +
- * overlay (which holds the modal) + bottom banner. This replaces the
- * earlier design where each piece was independently position:fixed
- * with hand-tuned top:52px / bottom:60px insets — that scheme broke
- * any time an ancestor of the SDK mount established a containing block
- * (transform / filter / backdrop-filter / contain on <body>, a wrapper,
- * etc.), at which point position:fixed becomes relative to that
- * ancestor and the math goes wrong. Flex layout makes the overlay
- * genuinely between the banners by structure, not by pixel math.
+ * fills the viewport and flex-columns its two children: top banner +
+ * overlay (which holds the modal). This replaces the earlier design
+ * where each piece was independently position:fixed with hand-tuned
+ * insets — that scheme broke any time an ancestor of the SDK mount
+ * established a containing block (transform / filter / backdrop-filter /
+ * contain on <body>, a wrapper, etc.), at which point position:fixed
+ * becomes relative to that ancestor and the math goes wrong. Flex layout
+ * pins the top banner and lets the overlay claim the rest by structure,
+ * not by pixel math.
  *
  * The root is pointer-events:none so the user's page underneath stays
  * interactive in transparent regions (there shouldn't be any when the
  * overlay's modal is up, but it's the right default). Each visual child
- * (banners + overlay dim) opts back in with pointer-events:auto. */
+ * (banner + overlay dim) opts back in with pointer-events:auto. */
 .eazo-handoff-root {
   ${TOKENS}
   position: fixed;
@@ -170,11 +169,6 @@ html.eazo-host-web .eazo-app-area-scroller {
   z-index: 2147483540;
   display: flex;
   flex-direction: column;
-  /* justify-content:space-between keeps the bottom banner pinned even
-   * when the user dismisses the modal (the overlay child unmounts) —
-   * without it the flex-column would collapse the bottom banner up to
-   * sit right under the top one. */
-  justify-content: space-between;
   color: var(--eazo-ink);
   font-family: var(--eazo-sans);
   box-sizing: border-box;
@@ -203,8 +197,11 @@ html.eazo-host-web .eazo-app-area-scroller {
 
 /* ============ TOP BANNER ============
  *
- * Slim three-piece strip: brand mark, single-line copy, CTA. The
- * underlying app's content sits below this. Non-dismissible.
+ * Single-row strip carrying everything the old top + bottom banners
+ * split between them: Eazo mark, a hairline divider, the app identity
+ * (icon + name) with a likes/comments rail beneath the name, and the
+ * Remix + "Open in app" CTAs on the right. The underlying app's content
+ * sits below this. Non-dismissible.
  */
 .eazo-banner-root {
   /* Flex child of .eazo-handoff-root — naturally pinned to the top of
@@ -214,7 +211,7 @@ html.eazo-host-web .eazo-app-area-scroller {
   align-items: center;
   gap: 12px;
   height: ${BANNER_HEIGHT_DESKTOP}px;
-  padding: 0 14px 0 18px;
+  padding: 0 14px 0 16px;
   background: var(--eazo-cream);
   border-bottom: 1px solid var(--eazo-hair);
   pointer-events: auto;
@@ -225,11 +222,117 @@ html.eazo-host-web .eazo-app-area-scroller {
   flex-shrink: 0;
   color: var(--eazo-ink);
 }
+/* Hairline separator. One sits between the Eazo mark and what follows;
+ * the is-wide variant (between the tagline and the app identity) only
+ * shows on wide bars, alongside the tagline. */
+.eazo-banner-divider {
+  flex-shrink: 0;
+  width: 1px; height: 26px;
+  background: var(--eazo-hair);
+}
+.eazo-banner-divider.is-wide { display: none; }
+
+/* App identity block. On narrow bars it takes the flexible middle so the
+ * name truncates (rather than the CTAs) when space is tight; on wide bars
+ * the tagline copy becomes the grower instead (see the min-width query
+ * below) and this shrinks to its content. */
+.eazo-banner-app {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+}
+
+/* Brand tagline — sits beside the Eazo mark. Hidden by default, revealed
+ * at its content width on wide bars (see the min-width query at the end of
+ * this sheet); it never grows into the slack. Truncates rather than
+ * wrapping so it never grows the banner height. */
 .eazo-banner-copy {
-  flex: 1; min-width: 0;
-  font-size: 14px; font-weight: 500;
+  display: none;
+  min-width: 0;
+  font-family: var(--eazo-sans);
+  font-size: 13px; font-weight: 500;
   color: var(--eazo-ink-soft);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.eazo-banner-app-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+.eazo-banner-app-meta {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.eazo-banner-app-name {
+  font-family: var(--eazo-sans);
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--eazo-ink); line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.eazo-banner-name-skel { width: 120px; height: 14px; border-radius: 5px; }
+
+/* Likes + comments rail under the app name. The rail is a link onto the
+ * same eazo:// handoff as the CTAs (see BannerStats), so it carries
+ * cursor + hover + focus affordances. */
+.eazo-banner-stats {
+  display: inline-flex; align-items: center; gap: 12px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.eazo-banner-stats:hover .eazo-banner-stat { color: var(--eazo-ink); }
+.eazo-banner-stats:focus-visible {
+  outline: 2px solid var(--eazo-coral);
+  outline-offset: 3px;
+}
+.eazo-banner-stat {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--eazo-sans);
+  font-size: 12px; font-weight: 500;
+  color: var(--eazo-ink-soft);
+  transition: color 140ms ease;
+}
+.eazo-banner-stat-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--eazo-ink-faint);
+}
+.eazo-banner-stat-icon.is-like { color: var(--eazo-coral); }
+.eazo-banner-stat-value {
+  font-variant-numeric: tabular-nums;
+}
+.eazo-banner-stat-skel {
+  display: inline-block;
+  width: 18px; height: 11px; border-radius: 4px;
+  background: linear-gradient(90deg,
+    rgba(17,19,15,0.05) 0%,
+    rgba(17,19,15,0.12) 50%,
+    rgba(17,19,15,0.05) 100%);
+  background-size: 200% 100%;
+  animation: eazo-skel-shimmer 1.4s linear infinite;
+}
+
+/* Right-aligned action cluster: secondary Remix + primary "Open in app". */
+.eazo-banner-actions {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+/* Remix is the secondary action — ghost pill so the coral "Open in app"
+ * CTA stays the clear primary. Same deep-link + iOS-store fallback. */
+.eazo-banner-remix {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--eazo-hair);
+  background: rgba(255,255,255,0.6);
+  color: var(--eazo-ink);
+  font-family: var(--eazo-sans);
+  font-size: 12px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.eazo-banner-remix:hover {
+  background: #fff;
+  border-color: rgba(17,19,15,0.18);
 }
 .eazo-banner-cta {
   flex-shrink: 0;
@@ -556,134 +659,47 @@ html.eazo-host-web .eazo-app-area-scroller {
 }
 .eazo-cta-primary:hover { filter: brightness(1.06); }
 
-/* ============ BOTTOM BANNER ============
+/* ============ WIDE BANNER (≥760px) ============
  *
- * Per V5 / M5 design: two prominent stats on the left (heart + chat,
- * each rendered as a tinted icon-tile with a stacked value-over-label
- * column) separated by a thin hair-divider, and a coral "Remix" pill
- * on the right that reuses the top-banner CTA handoff. A small
- * "eazo.ai ↗" mark sits to the left of the pill on desktop only —
- * on phone widths (≤480px) it drops out so the Remix pill keeps its
- * thumb-zone weight.
- */
-.eazo-bottom-root {
-  /* Flex child of .eazo-handoff-root — naturally pinned to the bottom of
-   * the viewport-filling container. No position:fixed needed. */
-  flex-shrink: 0;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px;
-  height: ${BOTTOM_HEIGHT_DESKTOP}px;
-  padding: 0 22px 0 26px;
-  background: #fff;
-  border-top: 1px solid var(--eazo-hair);
-  pointer-events: auto;
-  animation: eazo-handoff-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+ * Enough room for the brand tagline beside the Eazo mark. The tagline
+ * shows at its content width (grow: 0 — it never stretches into the
+ * slack); the app block stays the grower, so the flexible space lands
+ * between the app stats and the Remix + "Open in app" actions.
+ *
+ * On wide bars the app identity collapses to JUST the likes/comments
+ * rail, shown a size up — the tagline already carries the messaging, so
+ * the app icon and name are dropped to keep the row clean. Below this
+ * width all of that is hidden / reverts: the tagline + its divider go
+ * away and the app block shows icon + name + stats as the grower. */
+@media (min-width: 760px) {
+  .eazo-banner-copy { display: block; flex: 0 1 auto; }
+  .eazo-banner-divider.is-wide { display: block; }
+  /* App identity → stats only. */
+  .eazo-banner-app-icon,
+  .eazo-banner-app-name,
+  .eazo-banner-name-skel { display: none; }
+  /* Bump the stats a size up now that they stand alone. */
+  .eazo-banner-stats { gap: 16px; }
+  .eazo-banner-stat { font-size: 15px; gap: 6px; }
+  .eazo-banner-stat-icon svg { width: 15px; height: 15px; }
 }
-.eazo-bottom-stats {
-  display: inline-flex; align-items: center; gap: 22px;
-  min-width: 0; color: var(--eazo-ink);
-}
-.eazo-bottom-stat {
-  display: inline-flex; align-items: center; gap: 9px;
-  font-family: var(--eazo-sans);
-  flex-shrink: 0;
-}
-/* Tinted square tile that frames each stat icon — coral-on-cream for
- * filled glyphs (heart), neutral-on-cream for line glyphs (chat). */
-.eazo-bottom-stat-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px;
-  background: rgba(212,97,74,0.10);
-  color: var(--eazo-coral);
-  flex-shrink: 0;
-}
-.eazo-bottom-stat-icon.is-line {
-  background: rgba(17,19,15,0.05);
-  color: var(--eazo-ink);
-}
-.eazo-bottom-stat-text {
-  display: inline-flex; flex-direction: column; line-height: 1.05;
-}
-.eazo-bottom-stat-value {
-  font-family: var(--eazo-sans);
-  font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
-}
-.eazo-bottom-stat-label {
-  font-family: var(--eazo-sans);
-  font-size: 11px; font-weight: 500;
-  color: var(--eazo-ink-faint);
-  margin-top: 1px;
-}
-.eazo-bottom-stat-divider {
-  width: 1px; height: 28px;
-  background: var(--eazo-hair);
-  flex-shrink: 0;
-}
-.eazo-bottom-skel {
-  display: inline-block; vertical-align: middle;
-  width: 32px; height: 18px; border-radius: 4px;
-  background: linear-gradient(90deg,
-    rgba(17,19,15,0.05) 0%,
-    rgba(17,19,15,0.12) 50%,
-    rgba(17,19,15,0.05) 100%);
-  background-size: 200% 100%;
-  animation: eazo-skel-shimmer 1.4s linear infinite;
-}
-
-.eazo-bottom-actions {
-  display: inline-flex; align-items: center; gap: 14px;
-  flex-shrink: 0;
-}
-.eazo-bottom-site {
-  display: inline-flex; align-items: center; gap: 4px;
-  color: var(--eazo-ink-soft);
-  text-decoration: none;
-  font-family: var(--eazo-sans); font-size: 12px; font-weight: 500;
-  white-space: nowrap;
-  transition: color 140ms ease;
-}
-.eazo-bottom-site:hover { color: var(--eazo-ink); }
-.eazo-bottom-site b { color: var(--eazo-ink); font-weight: 600; }
-
-/* Primary CTA on the bottom banner. Renders as <a> so it picks up the
- * same iOS-timeout fallback handler as the top-banner CTA via the
- * shared bindCtaClick — keeps the Remix tap on the same install /
- * deeplink path as the rest of the handoff UX. */
-.eazo-bottom-remix {
-  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
-  height: 44px; padding: 0 20px 0 18px;
-  border: 0; cursor: pointer;
-  border-radius: 999px;
-  background: var(--eazo-coral-gradient); color: #fff;
-  font-family: var(--eazo-sans);
-  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
-  white-space: nowrap;
-  box-shadow:
-    0 12px 24px var(--eazo-glow),
-    inset 0 1px 0 rgba(255,255,255,0.18);
-  text-decoration: none;
-  transition: transform 140ms ease, box-shadow 140ms ease;
-}
-.eazo-bottom-remix:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 14px 28px var(--eazo-glow),
-    inset 0 1px 0 rgba(255,255,255,0.22);
-}
-.eazo-bottom-remix:active { transform: translateY(0); }
 
 /* ============ MOBILE TWEAKS (≤480px) ============ */
 @media (max-width: 480px) {
   .eazo-banner-root {
     height: ${BANNER_HEIGHT_MOBILE}px;
-    padding: 0 10px 0 14px;
+    padding: 0 12px;
     gap: 10px;
   }
-  .eazo-banner-copy {
-    font-size: 12px; line-height: 1.25; white-space: normal;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  }
-  .eazo-banner-cta { height: 28px; padding: 0 10px; font-size: 11px; border-radius: 8px; }
+  /* Reclaim width for the app identity + primary CTA: the Eazo wordmark,
+   * its divider, and the secondary Remix pill drop out on phones, where
+   * the coral "Open in app" button alone carries the handoff. */
+  .eazo-banner-brand,
+  .eazo-banner-divider,
+  .eazo-banner-remix { display: none; }
+  .eazo-banner-app { gap: 9px; }
+  .eazo-banner-stats { gap: 10px; }
+  .eazo-banner-cta { height: 32px; padding: 0 12px; font-size: 12px; border-radius: 9px; }
   /* Hover doesn't resolve reliably on touch — the CTA still works as a
    * plain link, no popover needed. Belt-and-suspenders to the JS check
    * (the popover render is also gated on the 'open' state, which never
@@ -717,35 +733,6 @@ html.eazo-host-web .eazo-app-area-scroller {
   .eazo-cta-primary { height: 44px; width: 100%; font-size: 14px; border-radius: 12px; }
   .eazo-cta-headline { display: none; }
   .eazo-cta-fine { display: none; }
-
-  .eazo-bottom-root {
-    height: ${BOTTOM_HEIGHT_MOBILE}px;
-    padding: 0 16px 0 20px;
-    gap: 12px;
-  }
-  /* Tighter cells per the M5 (390px) spec: smaller icon tile, smaller
-   * value, smaller divider. Labels stay — they're a key part of the
-   * visual rhythm in M5. */
-  .eazo-bottom-stats { gap: 12px; }
-  .eazo-bottom-stat { gap: 7px; }
-  .eazo-bottom-stat-icon { width: 26px; height: 26px; border-radius: 7px; }
-  .eazo-bottom-stat-value { font-size: 14px; }
-  .eazo-bottom-stat-label { font-size: 10px; }
-  .eazo-bottom-stat-divider { height: 24px; }
-  .eazo-bottom-skel { width: 28px; height: 15px; }
-  /* M5 drops the secondary eazo.ai mark on phone widths so the Remix
-   * pill keeps unambiguous thumb-zone weight. */
-  .eazo-bottom-site { display: none; }
-  .eazo-bottom-remix {
-    height: 44px; padding: 0 18px 0 16px;
-    gap: 8px; font-size: 13px;
-    box-shadow:
-      0 10px 22px var(--eazo-glow),
-      inset 0 1px 0 rgba(255,255,255,0.18);
-  }
-  /* Drop the trailing "this app" wording on phone widths — the icon
-   * plus the verb is already unambiguous and the pill stays compact. */
-  .eazo-bottom-remix-suffix { display: none; }
 }
 `;
 

@@ -20,8 +20,6 @@ import { resolveBannerCta, type BannerCta } from "./store-links";
 import {
   BANNER_HEIGHT_DESKTOP,
   BANNER_HEIGHT_MOBILE,
-  BOTTOM_HEIGHT_DESKTOP,
-  BOTTOM_HEIGHT_MOBILE,
   ensureBannerStylesInjected,
 } from "./styles";
 
@@ -31,9 +29,9 @@ import {
 const IOS_FALLBACK_TIMEOUT_MS = 1500;
 const MOBILE_BREAKPOINT_PX = 480;
 // Delay before the center handoff modal appears — gives users a minute
-// to actually use the app before the strong CTA pops up. The top and
-// bottom banners stay visible from first paint; this only gates the
-// center "Open in Eazo app" modal.
+// to actually use the app before the strong CTA pops up. The top banner
+// stays visible from first paint; this only gates the center "Open in
+// Eazo app" modal.
 const MODAL_DELAY_MS = 60_000;
 
 function isMobile(): boolean {
@@ -43,10 +41,6 @@ function isMobile(): boolean {
 
 function topBannerHeightPx(mobile: boolean): number {
   return mobile ? BANNER_HEIGHT_MOBILE : BANNER_HEIGHT_DESKTOP;
-}
-
-function bottomBannerHeightPx(mobile: boolean): number {
-  return mobile ? BOTTOM_HEIGHT_MOBILE : BOTTOM_HEIGHT_DESKTOP;
 }
 
 function formatStat(n: number | undefined): string {
@@ -83,15 +77,17 @@ function deriveInitials(name: string): string {
 /**
  * Web-only handoff overlay. Mounted by `<EazoProvider>` and visible only
  * in pure-web environments (not the eazoMobile WebView, not embedded
- * iframes). Three coordinated pieces:
+ * iframes). Two coordinated pieces:
  *
- *   1. Top banner — brand + "MOBILE REQUIRED" pill + domain + "Open in app" CTA.
+ *   1. Top banner — Eazo mark + app identity (icon, name) + likes/comments
+ *      stats + "Remix" and "Open in app" CTAs. Always visible from first
+ *      paint; non-dismissible.
  *   2. Full-screen scrim with coral spotlight + center modal (orbiting
- *      capability icons, app identity, QR + primary CTA). Non-dismissible.
- *   3. Bottom banner — capability rail + likes/comments stats + eazo.ai pill.
+ *      capability icons, app identity, QR + primary CTA). Appears after a
+ *      delay; dismissible per page load.
  *
  * App identity (name, tagline, likes, comments) is fetched once from
- * `GET /apps-open/:appId`. The CTA + QR encode the `eazo://` deep link;
+ * `GET /apps-open/:appId`. The CTAs + QR encode the `eazo://` deep link;
  * the iOS click-handler falls back to the App Store after a short delay
  * if the app isn't installed.
  *
@@ -167,14 +163,18 @@ export function EazoBrandBanner(): React.ReactElement | null {
   // Three coupled responsibilities, all client-side, all keyed to the
   // banner actually being visible (host === "web", post-mount):
   //
-  //  1. Reserve top + bottom padding on `<html>` so the host page's
-  //     flow-layout content doesn't tuck under the fixed banners.
+  //  1. Reserve top padding on `<html>` so the host page's flow-layout
+  //     content doesn't tuck under the fixed top banner. There is no
+  //     bottom banner, so no bottom padding is reserved.
   //
   //  2. Expose the reserved heights as `--eazo-handoff-top` / `bottom`
   //     CSS custom properties on `<html>`. The `.eazo-app-area`
   //     wrapper (rendered by `EazoProvider`) reads these for its inset
   //     box, and host code can read them too for tooltip / popover
-  //     coordination (e.g. `bottom: calc(var(--eazo-handoff-bottom) + 12px)`).
+  //     coordination. `--eazo-handoff-bottom` is pinned to `0px` — the
+  //     handoff no longer claims any space at the bottom edge — but it's
+  //     still published so host code reading it without a fallback gets
+  //     a valid length.
   //
   //  3. Add the `eazo-host-web` class on `<html>`. This is the GATE for
   //     the `.eazo-app-area` wrapper's effective styling (position:
@@ -185,13 +185,12 @@ export function EazoBrandBanner(): React.ReactElement | null {
   //     an inert pass-through `<div>` that doesn't disturb the host's
   //     scroll model or fixed-positioning containment.
   //
-  // All three are restored on unmount so a Provider that comes and
-  // goes leaves no residue.
+  // All are restored on unmount so a Provider that comes and goes leaves
+  // no residue.
   React.useEffect(() => {
     if (!mounted) return;
     const html = document.documentElement;
     const previousTop = html.style.paddingTop;
-    const previousBottom = html.style.paddingBottom;
     const previousVarTop = html.style.getPropertyValue("--eazo-handoff-top");
     const previousVarBottom = html.style.getPropertyValue(
       "--eazo-handoff-bottom",
@@ -201,11 +200,9 @@ export function EazoBrandBanner(): React.ReactElement | null {
       const m = isMobile();
       setMobile(m);
       const top = topBannerHeightPx(m);
-      const bottom = bottomBannerHeightPx(m);
       html.style.paddingTop = `${top}px`;
-      html.style.paddingBottom = `${bottom}px`;
       html.style.setProperty("--eazo-handoff-top", `${top}px`);
-      html.style.setProperty("--eazo-handoff-bottom", `${bottom}px`);
+      html.style.setProperty("--eazo-handoff-bottom", "0px");
     };
     apply();
     window.addEventListener("resize", apply);
@@ -213,7 +210,6 @@ export function EazoBrandBanner(): React.ReactElement | null {
       window.removeEventListener("resize", apply);
       html.classList.remove("eazo-host-web");
       html.style.paddingTop = previousTop;
-      html.style.paddingBottom = previousBottom;
       if (previousVarTop) {
         html.style.setProperty("--eazo-handoff-top", previousVarTop);
       } else {
@@ -264,7 +260,12 @@ export function EazoBrandBanner(): React.ReactElement | null {
 
   return (
     <div className="eazo-handoff-root">
-      <TopBanner cta={cta} pageUrl={pageUrl} />
+      <TopBanner
+        cta={cta}
+        pageUrl={pageUrl}
+        info={info}
+        loading={loading}
+      />
       {modalDismissed || !modalReady ? null : (
         <Overlay
           info={info}
@@ -275,7 +276,6 @@ export function EazoBrandBanner(): React.ReactElement | null {
           onDismiss={dismissModal}
         />
       )}
-      <BottomBanner info={info} loading={loading} cta={cta} />
     </div>
   );
 }
@@ -320,19 +320,136 @@ interface TopBannerProps {
    * Empty during the first render tick before the mount effect resolves.
    */
   pageUrl: string;
+  /** Public app info; null until the fetch resolves (or if it fails). */
+  info: PublicAppInfo | null;
+  /** True while the app-info fetch is in flight — drives the skeletons. */
+  loading: boolean;
 }
 
-function TopBanner({ cta, pageUrl }: TopBannerProps): React.ReactElement {
+function TopBanner({
+  cta,
+  pageUrl,
+  info,
+  loading,
+}: TopBannerProps): React.ReactElement {
+  // Remix shares the exact same deep-link + iOS-store-timeout flow as the
+  // "Open in app" CTA — both point at `eazo://app/<appId>`; the Remix vs
+  // Open intent split is the host app's job to read from the URL.
+  const onRemixClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+
+  // `app.icon` carries either an image URL or a short text glyph (emoji,
+  // single letter, etc.). Reuse the same URL detection the modal uses.
+  const rawIcon = info?.app.icon?.trim();
+  const iconUrl = rawIcon && isImageUrl(rawIcon) ? rawIcon : undefined;
+  const iconGlyph = rawIcon && !iconUrl ? rawIcon : undefined;
+  const initials = deriveInitials(info?.app.name ?? "Eazo app");
+
   return (
     <div className="eazo-banner-root" role="region" aria-label="Eazo app promotion">
       <span className="eazo-banner-brand">
-        <EazoLogo width={72} height={20} />
+        <EazoLogo width={64} height={18} />
       </span>
+      <span className="eazo-banner-divider" aria-hidden="true" />
+      {/* Brand tagline. Sits beside the Eazo mark and is shown only on
+       * wide screens (CSS-gated), at its content width. Hidden on narrower
+       * bars to give the app name and CTA the space. */}
       <span className="eazo-banner-copy">
         Get the full Eazo experience in our mobile app.
       </span>
-      <TopBannerCta cta={cta} pageUrl={pageUrl} />
+      {/* Divider between the brand tagline and the app identity. Wide-only,
+       * like the tagline — on narrow bars where the tagline is hidden this
+       * would otherwise double up with the brand divider. */}
+      <span className="eazo-banner-divider is-wide" aria-hidden="true" />
+      <div className="eazo-banner-app">
+        <span className="eazo-banner-app-icon">
+          <Monolith
+            initials={iconGlyph ?? initials}
+            iconUrl={iconUrl}
+            loading={loading}
+            size={34}
+          />
+        </span>
+        <div className="eazo-banner-app-meta">
+          {loading ? (
+            <span className="eazo-skel eazo-banner-name-skel" aria-label="Loading app name" />
+          ) : (
+            <span className="eazo-banner-app-name">
+              {info?.app.name ?? "This app"}
+            </span>
+          )}
+          <BannerStats info={info} loading={loading} cta={cta} />
+        </div>
+      </div>
+      <div className="eazo-banner-actions">
+        <a
+          className="eazo-banner-remix"
+          href={cta.href}
+          onClick={onRemixClick}
+          aria-label="Remix this app"
+        >
+          <RemixIcon size={15} />
+          <span className="eazo-banner-remix-label">Remix</span>
+        </a>
+        <TopBannerCta cta={cta} pageUrl={pageUrl} />
+      </div>
     </div>
+  );
+}
+
+/**
+ * Inline likes + comments rail shown under the app name in the top
+ * banner. Mirrors the metrics the public app endpoint exposes today
+ * (`likeNum`, `commentsCount`); `uv` is intentionally omitted — it reads
+ * as ambient web traffic, not social proof. Each value shows a small
+ * skeleton until the fetch resolves.
+ *
+ * The whole rail is a link onto the same `eazo://` deep link as the
+ * Remix / "Open in app" CTAs (shared `bindCtaClick` for the iOS
+ * App-Store fallback), so tapping the stats also hands off to the app.
+ */
+function BannerStats({
+  info,
+  loading,
+  cta,
+}: {
+  info: PublicAppInfo | null;
+  loading: boolean;
+  cta: BannerCta;
+}): React.ReactElement {
+  const onClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+  return (
+    <a
+      className="eazo-banner-stats"
+      href={cta.href}
+      onClick={onClick}
+      rel="noreferrer noopener"
+      aria-label="App likes and comments — open in the Eazo app"
+    >
+      <span className="eazo-banner-stat">
+        <span className="eazo-banner-stat-icon is-like">
+          <HeartIcon size={12} />
+        </span>
+        {loading ? (
+          <span className="eazo-banner-stat-skel" />
+        ) : (
+          <span className="eazo-banner-stat-value">
+            {formatStat(info?.app.likeNum)}
+          </span>
+        )}
+      </span>
+      <span className="eazo-banner-stat">
+        <span className="eazo-banner-stat-icon">
+          <ChatIcon size={12} />
+        </span>
+        {loading ? (
+          <span className="eazo-banner-stat-skel" />
+        ) : (
+          <span className="eazo-banner-stat-value">
+            {formatStat(info?.app.commentsCount)}
+          </span>
+        )}
+      </span>
+    </a>
   );
 }
 
@@ -745,127 +862,6 @@ function Monolith({ initials, iconUrl, loading, size }: MonolithProps): React.Re
         <span style={{ transform: "translateY(-1px)" }}>{initials}</span>
       ) : null}
       {showShimmer ? <div className="eazo-monolith-skel" /> : null}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Bottom banner — SDK capability rail on the left, social-proof stats on
-// the right. Informational only; the app-handoff prompts are owned by the
-// top banner and the center modal.
-// ---------------------------------------------------------------------------
-
-interface BottomBannerProps {
-  info: PublicAppInfo | null;
-  loading: boolean;
-  cta: BannerCta;
-}
-
-interface Stat {
-  key: string;
-  icon: React.ReactNode;
-  /** Coral filled glyph (heart) vs line glyph (chat, eye, etc.). */
-  filled?: boolean;
-  /** Formatted display value; null while loading. */
-  value: string | null;
-  label: string;
-}
-
-function BottomBanner({
-  info,
-  loading,
-  cta,
-}: BottomBannerProps): React.ReactElement {
-  // Source-of-truth stats come from the public app endpoint. Surface
-  // only metrics the backend exposes today AND that read meaningfully
-  // for a host-app promo surface — likes and comments. `uv` is in the
-  // DTO but reads as ambient web-traffic, not social proof, so it's
-  // intentionally not on this rail. Installs / rating / trend appeared
-  // in the V5 design canvas but require new backend fields — adding
-  // them is a backend change, not a banner change.
-  const stats: Stat[] = [
-    {
-      key: "likes",
-      icon: <HeartIcon size={16} />,
-      filled: true,
-      value: loading ? null : formatStat(info?.app.likeNum),
-      label: "likes",
-    },
-    {
-      key: "comments",
-      icon: <ChatIcon size={16} />,
-      value: loading ? null : formatStat(info?.app.commentsCount),
-      label: "comments",
-    },
-  ];
-
-  // Remix tap reuses the same deeplink + iOS-store-timeout flow as the
-  // top banner — both point at `eazo://app/<appId>` so the mobile shell
-  // can route to the right surface (the Remix vs Open intent split is
-  // up to the host app to wire from the URL params, not this banner).
-  const onRemixClick = React.useMemo(() => bindCtaClick(cta), [cta]);
-
-  return (
-    <div className="eazo-bottom-root" role="contentinfo">
-      <div
-        className="eazo-bottom-stats"
-        aria-label={loading ? "Loading app stats" : "App stats"}
-      >
-        {stats.map((s, i) => (
-          <React.Fragment key={s.key}>
-            {i > 0 && (
-              <span className="eazo-bottom-stat-divider" aria-hidden="true" />
-            )}
-            <span className="eazo-bottom-stat">
-              <span
-                className={`eazo-bottom-stat-icon${s.filled ? "" : " is-line"}`}
-              >
-                {s.icon}
-              </span>
-              <span className="eazo-bottom-stat-text">
-                {s.value === null ? (
-                  <span className="eazo-bottom-skel" />
-                ) : (
-                  <span className="eazo-bottom-stat-value">{s.value}</span>
-                )}
-                <span className="eazo-bottom-stat-label">{s.label}</span>
-              </span>
-            </span>
-          </React.Fragment>
-        ))}
-      </div>
-      <div className="eazo-bottom-actions">
-        <a
-          className="eazo-bottom-site"
-          href="https://eazo.ai/"
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          <b>eazo.ai</b>
-          <svg
-            width={10}
-            height={10}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M7 17 17 7M9 7h8v8" />
-          </svg>
-        </a>
-        <a
-          className="eazo-bottom-remix"
-          href={cta.href}
-          onClick={onRemixClick}
-          aria-label="Remix this app"
-        >
-          <RemixIcon size={17} />
-          Remix
-          <span className="eazo-bottom-remix-suffix">&nbsp;this app</span>
-        </a>
-      </div>
     </div>
   );
 }
