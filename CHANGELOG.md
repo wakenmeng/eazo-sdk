@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`memory.reportAction()` now respects the app author's "share anonymized
+  usage data" setting.** Before reporting, the SDK reads
+  `sendAnonymousData` from `GET /api/apps-open/:appId` (cached per app for
+  5 minutes, with concurrent lookups de-duplicated). When the author has
+  not opted in, `reportAction()` silently no-ops — neither the mobile
+  side-channel nor the `POST /api/open/gum/action` request fires. If the
+  platform is unreachable the gate fails open (reports proceed) and the
+  transient result is not cached.
+- **`apps-open` responses now include `sendAnonymousData`.**
+  `GET /api/apps-open/:appId` returns the boolean author consent flag.
+  Older SDKs ignore the new field. The server-side `POST /api/open/gum/action`
+  endpoint enforces the same gate as a second layer, returning `200` without
+  writing to Gum when the app has consent disabled.
+
 ## [0.19.1] - 2026-05-23
 
 ### Fixed
