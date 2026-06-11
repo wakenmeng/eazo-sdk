@@ -2,6 +2,7 @@ import { getBridge, waitForBootstrap } from "../bootstrap";
 import { MEMORY_REPORT_ACTION } from "../bridge/protocol";
 import { getPlatformApiBase, getAppId } from "../config";
 import { getHost } from "../env";
+import { resolveSendAnonymousDataEnabled } from "../banner-ui/app-info";
 import { auth } from "./auth";
 
 export interface MemoryActionParams {
@@ -86,6 +87,14 @@ export const memory = {
         "@eazo/sdk: app id not configured. Mount <EazoProvider appId={...}> at the root of your app.",
       );
     }
+
+    // Consent gate — only report when the app author opted in to share
+    // anonymized usage data. Fails open when the platform is unreachable
+    // (see resolveSendAnonymousDataEnabled). Silent no-op when disabled,
+    // matching the fire-and-forget contract callers rely on.
+    const sendAnonymousDataEnabled =
+      await resolveSendAnonymousDataEnabled(appId);
+    if (!sendAnonymousDataEnabled) return;
 
     const session = await auth.getSessionHeader();
     if (!session) {

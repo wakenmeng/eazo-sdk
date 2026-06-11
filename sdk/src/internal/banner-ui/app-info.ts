@@ -41,6 +41,11 @@ export interface PublicAppData {
   likeNum: number;
   uv: number;
   commentsCount: number;
+  /**
+   * True when the app author opted in to share anonymized usage data.
+   * Gates whether `memory.reportAction` reports user actions to Gum.
+   */
+  sendAnonymousData?: boolean;
 }
 
 /**
@@ -115,4 +120,62 @@ export async function fetchPublicAppInfo(
   } catch {
     return null;
   }
+}
+
+/** 5-minute TTL for the per-app `sendAnonymousData` consent flag. */
+const SEND_ANONYMOUS_DATA_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedConsent {
+  value: boolean;
+  expiresAt: number;
+}
+
+const sendAnonymousDataCache = new Map<string, CachedConsent>();
+const inFlightConsent = new Map<string, Promise<boolean>>();
+
+/**
+ * Resolves whether the app author opted in to share anonymized usage data
+ * (`creator_apps.send_anonymous_data`). Gates `memory.reportAction`.
+ *
+ * Caches the resolved flag per `appId` for 5 minutes and de-duplicates
+ * concurrent lookups so a burst of `reportAction` calls only hits
+ * `GET /api/apps-open/:appId` once.
+ *
+ * Fails open: when `fetchPublicAppInfo` returns null (network error,
+ * timeout, 404 for an unpublished app, malformed response) this resolves
+ * `true` and does NOT cache, so a transient failure never permanently
+ * silences reporting and a later call can re-check.
+ */
+export async function resolveSendAnonymousDataEnabled(
+  appId: string,
+): Promise<boolean> {
+  if (!appId) return true;
+
+  const cached = sendAnonymousDataCache.get(appId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const existing = inFlightConsent.get(appId);
+  if (existing) return existing;
+
+  const promise = (async (): Promise<boolean> => {
+    const info = await fetchPublicAppInfo(appId);
+    if (info === null) return true; // fail open — do not cache
+    const value = info.app.sendAnonymousData === true;
+    sendAnonymousDataCache.set(appId, {
+      value,
+      expiresAt: Date.now() + SEND_ANONYMOUS_DATA_CACHE_TTL_MS,
+    });
+    return value;
+  })().finally(() => {
+    inFlightConsent.delete(appId);
+  });
+
+  inFlightConsent.set(appId, promise);
+  return promise;
+}
+
+/** Clears the consent cache. Test-only. */
+export function __resetSendAnonymousDataCache(): void {
+  sendAnonymousDataCache.clear();
+  inFlightConsent.clear();
 }
