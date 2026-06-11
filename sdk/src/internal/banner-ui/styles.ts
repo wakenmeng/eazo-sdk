@@ -200,7 +200,7 @@ html.eazo-host-web .eazo-app-area-scroller {
  * Single-row strip carrying everything the old top + bottom banners
  * split between them: Eazo mark, a hairline divider, the app identity
  * (icon + name) with a likes/comments rail beneath the name, and the
- * Remix + "Open in app" CTAs on the right. The underlying app's content
+ * Remix + "Open in Eazo" CTAs on the right. The underlying app's content
  * sits below this. Non-dismissible.
  */
 .eazo-banner-root {
@@ -311,40 +311,43 @@ html.eazo-host-web .eazo-app-area-scroller {
   animation: eazo-skel-shimmer 1.4s linear infinite;
 }
 
-/* Right-aligned action cluster: secondary Remix + primary "Open in app". */
+/* Right-aligned action cluster: primary Remix + secondary "Open in Eazo". */
 .eazo-banner-actions {
   flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 8px;
 }
-/* Remix is the secondary action — ghost pill so the coral "Open in app"
- * CTA stays the clear primary. Same deep-link + iOS-store fallback. */
+/* Remix is the primary action — coral gradient pill. Same deep-link +
+ * iOS-store fallback as the "Open in Eazo" CTA. */
 .eazo-banner-remix {
   display: inline-flex; align-items: center; gap: 6px;
   height: 30px; padding: 0 12px;
   border-radius: 10px;
-  border: 1px solid var(--eazo-hair);
-  background: rgba(255,255,255,0.6);
-  color: var(--eazo-ink);
+  border: 0;
+  background: var(--eazo-coral-gradient); color: #fff;
   font-family: var(--eazo-sans);
   font-size: 12px; font-weight: 600;
   text-decoration: none; cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
+  box-shadow: 0 10px 22px var(--eazo-glow);
+  transition: filter 160ms ease, box-shadow 160ms ease;
 }
-.eazo-banner-remix:hover {
-  background: #fff;
-  border-color: rgba(17,19,15,0.18);
-}
+.eazo-banner-remix:hover { filter: brightness(1.06); }
+/* "Open in Eazo" is the secondary action — ghost pill so the coral Remix
+ * CTA stays the clear primary. */
 .eazo-banner-cta {
   flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 6px;
   height: 30px; padding: 0 14px; border-radius: 10px;
-  background: var(--eazo-coral-gradient); color: #fff;
-  font-size: 12px; font-weight: 600; border: 0; cursor: pointer;
+  border: 1px solid var(--eazo-hair);
+  background: rgba(255,255,255,0.6);
+  color: var(--eazo-ink);
+  font-size: 12px; font-weight: 600; cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 10px 22px var(--eazo-glow);
-  transition: filter 160ms ease, box-shadow 160ms ease;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-.eazo-banner-cta:hover { filter: brightness(1.06); }
+.eazo-banner-cta:hover {
+  background: #fff;
+  border-color: rgba(17,19,15,0.18);
+}
 
 /* CTA wrapper anchors the hover/focus popover. position:relative is the
  * coordinate origin for the absolutely-positioned popover below. */
@@ -664,7 +667,7 @@ html.eazo-host-web .eazo-app-area-scroller {
  * Enough room for the brand tagline beside the Eazo mark. The tagline
  * shows at its content width (grow: 0 — it never stretches into the
  * slack); the app block stays the grower, so the flexible space lands
- * between the app stats and the Remix + "Open in app" actions.
+ * between the app stats and the Remix + "Open in Eazo" actions.
  *
  * On wide bars the app identity collapses to JUST the likes/comments
  * rail, shown a size up — the tagline already carries the messaging, so
@@ -691,15 +694,32 @@ html.eazo-host-web .eazo-app-area-scroller {
     padding: 0 12px;
     gap: 10px;
   }
-  /* Reclaim width for the app identity + primary CTA: the Eazo wordmark,
-   * its divider, and the secondary Remix pill drop out on phones, where
-   * the coral "Open in app" button alone carries the handoff. */
+  /* Reclaim width on phones: the Eazo wordmark, its divider, and the
+   * (now primary, coral) Remix pill drop out so the "Open in Eazo" button
+   * alone carries the handoff. */
   .eazo-banner-brand,
   .eazo-banner-divider,
   .eazo-banner-remix { display: none; }
   .eazo-banner-app { gap: 9px; }
   .eazo-banner-stats { gap: 10px; }
-  .eazo-banner-cta { height: 32px; padding: 0 12px; font-size: 12px; border-radius: 9px; }
+  /* It's the only CTA left on phones, so it takes the primary coral
+   * treatment here (it's the ghost secondary on wider bars, where the
+   * coral Remix pill is the primary). */
+  .eazo-banner-cta {
+    height: 32px; padding: 0 12px; font-size: 12px; border-radius: 9px;
+    border: 0;
+    background: var(--eazo-coral-gradient);
+    color: #fff;
+    box-shadow: 0 10px 22px var(--eazo-glow);
+  }
+  /* The wider-bar ghost :hover flips the bg to white — wrong for the
+   * coral mobile button, and it sticks after a tap on touch. Keep coral
+   * and just brighten, matching the Remix primary hover. */
+  .eazo-banner-cta:hover {
+    background: var(--eazo-coral-gradient);
+    border-color: transparent;
+    filter: brightness(1.06);
+  }
   /* Hover doesn't resolve reliably on touch — the CTA still works as a
    * plain link, no popover needed. Belt-and-suspenders to the JS check
    * (the popover render is also gated on the 'open' state, which never

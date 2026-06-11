@@ -59,30 +59,44 @@ export interface BannerCta {
  * - **iOS**: `eazo://app/<appId>`. If the app is installed Safari opens
  *   it and the page is backgrounded; otherwise Safari shows a "Cannot
  *   open" toast and the page stays visible — the caller's JS timeout
- *   then navigates to the App Store.
+ *   then navigates to the fallback URL.
  * - **Android**: Chrome `intent://app/<appId>#Intent;scheme=eazo;…;end`.
  *   Chrome opens the app when installed (launch URL becomes
  *   `eazo://app/<appId>`) and navigates to `browser_fallback_url`
  *   natively when not. No JS timeout needed.
- * - **Desktop**: just the marketing site; no app-open attempt.
+ * - **Desktop**: just the fallback URL; no app-open attempt.
+ *
+ * `options.fallbackUrl` overrides where every platform lands when the app
+ * doesn't open — the iOS `storeUrl`, the Android `browser_fallback_url`,
+ * and the desktop `href`. Defaults to the platform store / marketing
+ * site. The "Remix" CTA passes the creator portal here, for example.
  */
-export function resolveBannerCta(): BannerCta {
+export function resolveBannerCta(
+  options: { fallbackUrl?: string } = {},
+): BannerCta {
+  const fallbackUrl = options.fallbackUrl;
   if (typeof navigator === "undefined") {
-    return { href: MARKETING_URL, storeUrl: MARKETING_URL, needsTimeoutFallback: false };
+    const url = fallbackUrl ?? MARKETING_URL;
+    return { href: url, storeUrl: url, needsTimeoutFallback: false };
   }
   const platform = detectPlatform(navigator.userAgent);
   const appId = getAppId();
   const path = appId ? `app/${encodeURIComponent(appId)}` : "";
   if (platform === "ios") {
-    return { href: `eazo://${path}`, storeUrl: APP_STORE_URL, needsTimeoutFallback: true };
+    return {
+      href: `eazo://${path}`,
+      storeUrl: fallbackUrl ?? APP_STORE_URL,
+      needsTimeoutFallback: true,
+    };
   }
   if (platform === "android") {
-    const fallback = encodeURIComponent(PLAY_STORE_URL);
+    const fallback = encodeURIComponent(fallbackUrl ?? PLAY_STORE_URL);
     return {
       href: `intent://${path}#Intent;scheme=eazo;package=${ANDROID_PACKAGE};S.browser_fallback_url=${fallback};end`,
-      storeUrl: PLAY_STORE_URL,
+      storeUrl: fallbackUrl ?? PLAY_STORE_URL,
       needsTimeoutFallback: false,
     };
   }
-  return { href: MARKETING_URL, storeUrl: MARKETING_URL, needsTimeoutFallback: false };
+  const url = fallbackUrl ?? MARKETING_URL;
+  return { href: url, storeUrl: url, needsTimeoutFallback: false };
 }

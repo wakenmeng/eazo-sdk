@@ -28,6 +28,11 @@ import {
 // store. Matches the value in `store-links.ts`.
 const IOS_FALLBACK_TIMEOUT_MS = 1500;
 const MOBILE_BREAKPOINT_PX = 480;
+// Where the "Remix" CTA sends users when the Eazo app doesn't open
+// (not installed / desktop) — the web creator portal, where they can
+// remix the app in the browser. The primary handoff CTAs keep their
+// default store / marketing fallback.
+const REMIX_FALLBACK_URL = "https://creator.eazo.ai/";
 // The center handoff modal pops immediately on load. After the user
 // dismisses it (X / ESC), it re-arms and pops again this long later —
 // repeating for each dismiss. The top banner stays visible throughout;
@@ -80,7 +85,7 @@ function deriveInitials(name: string): string {
  * iframes). Two coordinated pieces:
  *
  *   1. Top banner — Eazo mark + app identity (icon, name) + likes/comments
- *      stats + "Remix" and "Open in app" CTAs. Always visible from first
+ *      stats + "Remix" and "Open in Eazo" CTAs. Always visible from first
  *      paint; non-dismissible.
  *   2. Full-screen scrim with coral spotlight + center modal (orbiting
  *      capability icons, app identity, QR + primary CTA). Appears after a
@@ -340,10 +345,15 @@ function TopBanner({
   info,
   loading,
 }: TopBannerProps): React.ReactElement {
-  // Remix shares the exact same deep-link + iOS-store-timeout flow as the
-  // "Open in app" CTA — both point at `eazo://app/<appId>`; the Remix vs
-  // Open intent split is the host app's job to read from the URL.
-  const onRemixClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+  // Remix targets the same `eazo://app/<appId>` deep link as the
+  // "Open in Eazo" CTA (the Remix vs Open intent split is the host app's
+  // job to read from the URL), but when the app doesn't open it falls
+  // back to the web creator portal instead of the store / marketing site.
+  const remixCta = React.useMemo(
+    () => resolveBannerCta({ fallbackUrl: REMIX_FALLBACK_URL }),
+    [],
+  );
+  const onRemixClick = React.useMemo(() => bindCtaClick(remixCta), [remixCta]);
 
   // `app.icon` carries either an image URL or a short text glyph (emoji,
   // single letter, etc.). Reuse the same URL detection the modal uses.
@@ -391,7 +401,7 @@ function TopBanner({
       <div className="eazo-banner-actions">
         <a
           className="eazo-banner-remix"
-          href={cta.href}
+          href={remixCta.href}
           onClick={onRemixClick}
           aria-label="Remix this app"
         >
@@ -412,7 +422,7 @@ function TopBanner({
  * skeleton until the fetch resolves.
  *
  * The whole rail is a link onto the same `eazo://` deep link as the
- * Remix / "Open in app" CTAs (shared `bindCtaClick` for the iOS
+ * Remix / "Open in Eazo" CTAs (shared `bindCtaClick` for the iOS
  * App-Store fallback), so tapping the stats also hands off to the app.
  */
 function BannerStats({
@@ -525,7 +535,7 @@ function TopBannerCta({
         onClick={onClick}
         aria-describedby={open ? "eazo-banner-cta-popover" : undefined}
       >
-        Open in app
+        Open in Eazo
       </a>
       {open && pageUrl ? (
         <div
