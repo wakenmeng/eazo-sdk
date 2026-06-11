@@ -33,6 +33,16 @@ export function LoginUI(): React.ReactElement | null {
 
   React.useEffect(() => {
     if (!ui.open) return;
+    // Reset any stale in-flight UI state from a previous attempt. The
+    // underlying social-auth popup promise may still be pending (we have
+    // no way to cancel Authing's `social.authorize` callback), but the
+    // UI must always open in a clean state so users can retry.
+    setLoginUI({
+      submitting: false,
+      submittingProvider: null,
+      error: null,
+      providersLoading: true,
+    });
     auth.fetchSocialConnections().then(
       (all) => {
         setLoginUI({
@@ -42,13 +52,22 @@ export function LoginUI(): React.ReactElement | null {
       },
       () => setLoginUI({ providersLoading: false }),
     );
-    setLoginUI({ providersLoading: true });
   }, [ui.open]);
 
   if (typeof document === "undefined") return null;
 
   const onOpenChange = (next: boolean): void => {
-    if (!next) _cancelPendingLogin("user closed login UI");
+    if (next) return;
+    // Force-reset in-flight UI state on close. The orphaned promise from
+    // `auth.loginWithSocial` may never settle (e.g. user closed the
+    // OAuth popup without completing) — decoupling the UI state from the
+    // promise prevents the spinner from being stuck across reopens.
+    setLoginUI({
+      submitting: false,
+      submittingProvider: null,
+      error: null,
+    });
+    _cancelPendingLogin("user closed login UI");
   };
 
   return (
@@ -81,10 +100,46 @@ function ProvidersStep(): React.ReactElement {
 
   const handleSocial = async (identifier: string): Promise<void> => {
     setLoginUI({ submitting: true, submittingProvider: identifier, error: null });
+
+    // Authing's `social.authorize` opens a popup and only fires its
+    // callback on success/error. If the user closes the popup without
+    // completing, neither callback runs — the promise hangs forever and
+    // the spinner gets stuck. Detect "popup closed" via the window
+    // focus signal: `blur` when the popup opens (parent loses focus),
+    // `focus` when it closes (parent regains focus). After focus we
+    // give the legitimate callback a short grace period before forcing
+    // the UI back to a clean state — the underlying promise is
+    // orphaned, which is fine (no observable side effect since we no
+    // longer wait on it).
+    let cleanupListeners = (): void => {};
+    if (typeof window !== "undefined") {
+      const handleFocus = (): void => {
+        // Grace period gives a successful `onSuccess` callback time to
+        // resolve `loginWithSocial`, which would clear state via the
+        // try-block path below.
+        window.setTimeout(() => {
+          const current = store.getSnapshot().loginUI;
+          if (current.submittingProvider === identifier) {
+            setLoginUI({ submitting: false, submittingProvider: null });
+          }
+        }, 1200);
+      };
+      const handleBlur = (): void => {
+        window.addEventListener("focus", handleFocus, { once: true });
+      };
+      window.addEventListener("blur", handleBlur, { once: true });
+      cleanupListeners = () => {
+        window.removeEventListener("blur", handleBlur);
+        window.removeEventListener("focus", handleFocus);
+      };
+    }
+
     try {
       await auth.loginWithSocial(identifier);
+      cleanupListeners();
       setLoginUI({ open: false, submitting: false, submittingProvider: null, error: null });
     } catch (err) {
+      cleanupListeners();
       setLoginUI({
         submitting: false,
         submittingProvider: null,
