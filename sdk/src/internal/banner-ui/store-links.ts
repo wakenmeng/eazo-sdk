@@ -1,4 +1,8 @@
 import { getAppId } from "../config";
+import {
+  appendCurrentShareAttribution,
+  buildShareAttributionQuery,
+} from "./share-attribution";
 
 // TODO(banner): replace placeholders once the iOS App Store ID and Android
 // package name are confirmed by the mobile team. Until then, all platforms
@@ -23,9 +27,9 @@ function detectPlatform(ua: string): Platform {
 export function resolveStoreUrl(): string {
   if (typeof navigator === "undefined") return MARKETING_URL;
   const platform = detectPlatform(navigator.userAgent);
-  if (platform === "ios") return APP_STORE_URL;
-  if (platform === "android") return PLAY_STORE_URL;
-  return MARKETING_URL;
+  if (platform === "ios") return appendCurrentShareAttribution(APP_STORE_URL);
+  if (platform === "android") return appendCurrentShareAttribution(PLAY_STORE_URL);
+  return appendCurrentShareAttribution(MARKETING_URL);
 }
 
 export interface BannerCta {
@@ -74,29 +78,34 @@ export interface BannerCta {
 export function resolveBannerCta(
   options: { fallbackUrl?: string } = {},
 ): BannerCta {
-  const fallbackUrl = options.fallbackUrl;
+  const fallbackUrl = options.fallbackUrl
+    ? appendCurrentShareAttribution(options.fallbackUrl)
+    : undefined;
   if (typeof navigator === "undefined") {
     const url = fallbackUrl ?? MARKETING_URL;
     return { href: url, storeUrl: url, needsTimeoutFallback: false };
   }
   const platform = detectPlatform(navigator.userAgent);
   const appId = getAppId();
-  const path = appId ? `app/${encodeURIComponent(appId)}` : "";
+  const query = buildShareAttributionQuery();
+  const path = appId ? `app/${encodeURIComponent(appId)}${query}` : query;
   if (platform === "ios") {
+    const storeUrl = fallbackUrl ?? appendCurrentShareAttribution(APP_STORE_URL);
     return {
       href: `eazo://${path}`,
-      storeUrl: fallbackUrl ?? APP_STORE_URL,
+      storeUrl,
       needsTimeoutFallback: true,
     };
   }
   if (platform === "android") {
-    const fallback = encodeURIComponent(fallbackUrl ?? PLAY_STORE_URL);
+    const storeUrl = fallbackUrl ?? appendCurrentShareAttribution(PLAY_STORE_URL);
+    const fallback = encodeURIComponent(storeUrl);
     return {
       href: `intent://${path}#Intent;scheme=eazo;package=${ANDROID_PACKAGE};S.browser_fallback_url=${fallback};end`,
-      storeUrl: fallbackUrl ?? PLAY_STORE_URL,
+      storeUrl,
       needsTimeoutFallback: false,
     };
   }
-  const url = fallbackUrl ?? MARKETING_URL;
+  const url = fallbackUrl ?? appendCurrentShareAttribution(MARKETING_URL);
   return { href: url, storeUrl: url, needsTimeoutFallback: false };
 }

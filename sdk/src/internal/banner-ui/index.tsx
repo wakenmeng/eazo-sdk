@@ -18,6 +18,10 @@ import { fetchPublicAppInfo, type PublicAppInfo } from "./app-info";
 import { getInitialAppInfo } from "./initial-info";
 import { resolveBannerCta, type BannerCta } from "./store-links";
 import {
+  trackShareAttribution,
+  type ShareAttributionAction,
+} from "./share-attribution";
+import {
   BANNER_HEIGHT_DESKTOP,
   BANNER_HEIGHT_MOBILE,
   ensureBannerStylesInjected,
@@ -269,6 +273,15 @@ export function EazoBrandBanner(): React.ReactElement | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
+  React.useEffect(() => {
+    if (!mounted) return;
+    if (loading && !info) return;
+    trackShareAttribution("page_open", {
+      appName: info?.app.name,
+      dedupePageOpen: true,
+    });
+  }, [info, loading, mounted]);
+
   if (!mounted || !cta) return null;
 
   return (
@@ -299,8 +312,15 @@ export function EazoBrandBanner(): React.ReactElement | null {
 // modal primary CTA share the exact same behaviour.
 // ---------------------------------------------------------------------------
 
-function bindCtaClick(cta: BannerCta): React.MouseEventHandler<HTMLAnchorElement> {
+function bindCtaClick(
+  cta: BannerCta,
+  options: { action?: ShareAttributionAction; appName?: string | null } = {},
+): React.MouseEventHandler<HTMLAnchorElement> {
   return () => {
+    trackShareAttribution(options.action ?? "open_app_click", {
+      appName: options.appName,
+      targetUrl: cta.href,
+    });
     if (!cta.needsTimeoutFallback) return;
     const start = Date.now();
     let appOpened = false;
@@ -353,7 +373,14 @@ function TopBanner({
     () => resolveBannerCta({ fallbackUrl: REMIX_FALLBACK_URL }),
     [],
   );
-  const onRemixClick = React.useMemo(() => bindCtaClick(remixCta), [remixCta]);
+  const onRemixClick = React.useMemo(
+    () =>
+      bindCtaClick(remixCta, {
+        action: "remix_click",
+        appName: info?.app.name,
+      }),
+    [info?.app.name, remixCta],
+  );
 
   // `app.icon` carries either an image URL or a short text glyph (emoji,
   // single letter, etc.). Reuse the same URL detection the modal uses.
@@ -408,7 +435,7 @@ function TopBanner({
           <RemixIcon size={15} />
           <span className="eazo-banner-remix-label">Remix</span>
         </a>
-        <TopBannerCta cta={cta} pageUrl={pageUrl} />
+        <TopBannerCta cta={cta} pageUrl={pageUrl} appName={info?.app.name} />
       </div>
     </div>
   );
@@ -434,7 +461,10 @@ function BannerStats({
   loading: boolean;
   cta: BannerCta;
 }): React.ReactElement {
-  const onClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+  const onClick = React.useMemo(
+    () => bindCtaClick(cta, { appName: info?.app.name }),
+    [cta, info?.app.name],
+  );
   return (
     <a
       className="eazo-banner-stats"
@@ -488,8 +518,16 @@ const POPOVER_HIDE_DELAY_MS = 140;
 function TopBannerCta({
   cta,
   pageUrl,
-}: { cta: BannerCta; pageUrl: string }): React.ReactElement {
-  const onClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+  appName,
+}: {
+  cta: BannerCta;
+  pageUrl: string;
+  appName?: string | null;
+}): React.ReactElement {
+  const onClick = React.useMemo(
+    () => bindCtaClick(cta, { appName }),
+    [appName, cta],
+  );
   const [open, setOpen] = React.useState(false);
   const hideTimerRef = React.useRef<number | null>(null);
 
@@ -576,7 +614,10 @@ interface OverlayProps {
 }
 
 function Overlay({ cta, info, loading, pageUrl, mobile, onDismiss }: OverlayProps): React.ReactElement {
-  const onClick = React.useMemo(() => bindCtaClick(cta), [cta]);
+  const onClick = React.useMemo(
+    () => bindCtaClick(cta, { appName: info?.app.name }),
+    [cta, info?.app.name],
+  );
   // While loading we still want SOMETHING in the monolith; initials of
   // "Eazo app" reads better than a literal placeholder. Once `info`
   // resolves, the real name's initials or cover image take over.
