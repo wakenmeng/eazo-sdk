@@ -21,10 +21,29 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./payments": {
+      "types": "./dist/payments.d.ts",
+      "default": "./dist/payments.js"
+    },
+    "./payments/server": {
+      "types": "./dist/payments.server.d.ts",
+      "default": "./dist/payments.server.js"
+    },
+    "./payments/next": {
+      "types": "./dist/payments.next.d.ts",
+      "default": "./dist/payments.next.js"
+    },
+    "./payments/testing": {
+      "types": "./dist/payments.testing.d.ts",
+      "default": "./dist/payments.testing.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
     }
+  },
+  "bin": {
+    "eazo-sdk": "./dist/cli.js"
   },
   "files": [
     "dist",
