@@ -4,6 +4,7 @@ import {
   type CreateEazoCheckoutResult,
   type EazoCheckoutSessionRequest,
   type EazoCheckoutSessionResponse,
+  type EazoEntitlement,
   type EazoPaymentApiErrorBody,
   type EazoPaymentStatus,
 } from "./payments";
@@ -56,9 +57,16 @@ export function buildEazoCheckoutRequest(
   input: CreateEazoCheckoutInput,
 ): EazoCheckoutSessionRequest {
   const { appId } = requireEazoPaymentEnv();
+  const productKey = input.productKey;
+  const entitlementKey = input.entitlementKey || productKey;
+  const mode = input.mode || "one_time";
 
   return {
     app_id: appId,
+    ...(input.appUserId ? { app_user_id: input.appUserId } : {}),
+    product_key: productKey,
+    entitlement_key: entitlementKey,
+    mode,
     unit_amount: input.unitAmount,
     currency: input.currency,
     product_name: input.productName,
@@ -66,12 +74,15 @@ export function buildEazoCheckoutRequest(
     cancel_url: input.cancelUrl,
     quantity: input.quantity || 1,
     metadata: {
-      product_key: input.productKey,
+      product_key: productKey,
+      entitlement_key: entitlementKey,
+      mode,
+      ...(input.appUserId ? { app_user_id: input.appUserId } : {}),
       ...(input.metadata || {}),
     },
     idempotency_key:
       input.idempotencyKey ||
-      createStableCheckoutIdempotencyKey(appId, input.productKey, input.metadata?.user_id),
+      createStableCheckoutIdempotencyKey(appId, productKey, input.appUserId || input.metadata?.user_id),
   };
 }
 
@@ -102,10 +113,15 @@ export async function createEazoCheckoutSession(
   };
 }
 
-export async function getEazoPaymentStatus(paymentId: string): Promise<EazoPaymentStatus> {
+export async function getEazoPaymentStatus(
+  paymentId: string,
+  options: { appUserId?: string } = {},
+): Promise<EazoPaymentStatus> {
   const { apiBase, appId, privateKey } = requireEazoPaymentEnv();
+  const query = new URLSearchParams({ app_id: appId });
+  if (options.appUserId) query.set("app_user_id", options.appUserId);
   const response = await fetch(
-    `${apiBase}/api/open/payments/${encodeURIComponent(paymentId)}/status?app_id=${encodeURIComponent(appId)}`,
+    `${apiBase}/api/open/payments/${encodeURIComponent(paymentId)}/status?${query.toString()}`,
     {
       headers: { Authorization: `Bearer ${privateKey}` },
       cache: "no-store",
@@ -119,11 +135,38 @@ export async function getEazoPaymentStatus(paymentId: string): Promise<EazoPayme
   return data;
 }
 
+export async function getEazoEntitlementStatus(
+  productKey: string,
+  options: { appUserId?: string } = {},
+): Promise<EazoEntitlement> {
+  const { apiBase, appId, privateKey } = requireEazoPaymentEnv();
+  const query = new URLSearchParams({
+    app_id: appId,
+    product_key: productKey,
+  });
+  if (options.appUserId) query.set("app_user_id", options.appUserId);
+
+  const response = await fetch(`${apiBase}/api/open/payments/entitlements?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${privateKey}` },
+    cache: "no-store",
+  });
+
+  const data = (await readJson(response)) as EazoEntitlement & EazoPaymentApiErrorBody;
+  if (!response.ok) {
+    throw new EazoPaymentApiError(response.status, data, "Payment entitlement failed");
+  }
+  return data;
+}
+
 export type {
   CreateEazoCheckoutInput,
   CreateEazoCheckoutResult,
   EazoCheckoutSessionRequest,
   EazoCheckoutSessionResponse,
+  EazoEntitlement,
+  EazoEntitlementStatusValue,
+  EazoPaymentInterval,
+  EazoPaymentMode,
   EazoPaymentApiErrorBody,
   EazoPaymentCurrency,
   EazoPaymentMetadata,

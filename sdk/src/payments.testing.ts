@@ -1,6 +1,8 @@
 import type {
   EazoCheckoutSessionResponse,
   EazoCheckoutSessionRequest,
+  EazoEntitlement,
+  EazoEntitlementStatusValue,
   EazoPaymentStatus,
   EazoPaymentStatusValue,
 } from "./payments";
@@ -32,6 +34,26 @@ export function mockEazoPaymentStatus(
   };
 }
 
+export function mockEazoEntitlement(
+  status: EazoEntitlementStatusValue,
+  overrides: Partial<EazoEntitlement> = {},
+): EazoEntitlement {
+  return {
+    app_id: "app_test",
+    app_user_id: "app_user_test",
+    product_key: "premium",
+    entitlement_key: "premium",
+    status,
+    active: status === "active",
+    payment_id: status === "active" ? "cap_test_eazo" : null,
+    source_payment_id: status === "active" ? "cap_test_eazo" : null,
+    current_period_end: null,
+    metadata: {},
+    updated_at: 1_800_000_000_000,
+    ...overrides,
+  };
+}
+
 export function mockFetchJson(status: number, body: unknown) {
   globalThis.fetch = async () => new Response(JSON.stringify(body), {
     status,
@@ -48,6 +70,15 @@ export function assertEazoCheckoutRequestContract(request: EazoCheckoutSessionRe
   }
   if (body.product_name === undefined) {
     throw new Error("Eazo checkout request must include product_name");
+  }
+  if (body.product_key === undefined) {
+    throw new Error("Eazo checkout request must include product_key");
+  }
+  if (body.entitlement_key === undefined) {
+    throw new Error("Eazo checkout request must include entitlement_key");
+  }
+  if (body.mode !== "one_time" && body.mode !== "subscription") {
+    throw new Error("Eazo checkout request must include a supported mode");
   }
   for (const forbidden of ["amount", "title", "product_id", "checkout_url", "order_id"]) {
     if (Object.prototype.hasOwnProperty.call(body, forbidden)) {

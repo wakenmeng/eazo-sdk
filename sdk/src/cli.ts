@@ -31,6 +31,8 @@ export const PAYMENT_PRODUCTS = {
     name: "Premium unlock",
     unitAmount: 499,
     currency: "usd",
+    mode: "one_time",
+    entitlementKey: "premium",
   },
 } as const satisfies Record<string, EazoPaymentProduct>;
 
@@ -56,6 +58,14 @@ function statusRouteTemplate() {
 import { createEazoPaymentStatusRoute } from "@eazo/sdk/payments/next";
 
 export const GET = createEazoPaymentStatusRoute();
+`);
+}
+
+function entitlementRouteTemplate() {
+  return normalizeNewline(`
+import { createEazoEntitlementRoute } from "@eazo/sdk/payments/next";
+
+export const GET = createEazoEntitlementRoute();
 `);
 }
 
@@ -89,14 +99,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildEazoCheckoutRequest,
   createEazoCheckoutSession,
+  getEazoEntitlementStatus,
   getEazoPaymentStatus,
 } from "@eazo/sdk/payments/server";
 import {
   assertEazoCheckoutRequestContract,
   mockEazoCheckoutResponse,
+  mockEazoEntitlement,
   mockEazoPaymentStatus,
 } from "@eazo/sdk/payments/testing";
 import { PAYMENT_PRODUCTS } from "./catalog";
+
+const TEST_PRODUCT = PAYMENT_PRODUCTS.premium;
 
 const originalEnv = { ...process.env };
 
@@ -122,12 +136,15 @@ describe("Eazo Payments integration contract", () => {
   });
 
   it("builds the platform checkout DTO from the product catalog", () => {
-    const product = PAYMENT_PRODUCTS.premium;
+    const product = TEST_PRODUCT;
     const request = buildEazoCheckoutRequest({
       productKey: product.key,
       productName: product.name,
       unitAmount: product.unitAmount,
       currency: product.currency,
+      mode: product.mode,
+      entitlementKey: product.entitlementKey,
+      appUserId: "app_user_test",
       successUrl: "https://app.example.com/payment/success",
       cancelUrl: "https://app.example.com/payment/cancel",
       idempotencyKey: "checkout-once",
@@ -135,9 +152,18 @@ describe("Eazo Payments integration contract", () => {
 
     expect(request).toMatchObject({
       app_id: "app_test",
-      unit_amount: 499,
-      product_name: "Premium unlock",
-      metadata: { product_key: "premium" },
+      app_user_id: "app_user_test",
+      product_key: product.key,
+      entitlement_key: product.entitlementKey,
+      mode: "one_time",
+      unit_amount: product.unitAmount,
+      product_name: product.name,
+      metadata: {
+        product_key: product.key,
+        entitlement_key: product.entitlementKey,
+        mode: product.mode,
+        app_user_id: "app_user_test",
+      },
     });
     assertEazoCheckoutRequestContract(request);
   });
@@ -147,10 +173,13 @@ describe("Eazo Payments integration contract", () => {
 
     await expect(
       createEazoCheckoutSession({
-        productKey: "premium",
-        productName: "Premium unlock",
-        unitAmount: 499,
-        currency: "usd",
+        productKey: TEST_PRODUCT.key,
+        productName: TEST_PRODUCT.name,
+        unitAmount: TEST_PRODUCT.unitAmount,
+        currency: TEST_PRODUCT.currency,
+        mode: TEST_PRODUCT.mode,
+        entitlementKey: TEST_PRODUCT.entitlementKey,
+        appUserId: "app_user_test",
         successUrl: "https://app.example.com/payment/success",
         cancelUrl: "https://app.example.com/payment/cancel",
       }),
@@ -165,10 +194,13 @@ describe("Eazo Payments integration contract", () => {
 
     await expect(
       createEazoCheckoutSession({
-        productKey: "premium",
-        productName: "Premium unlock",
-        unitAmount: 499,
-        currency: "usd",
+        productKey: TEST_PRODUCT.key,
+        productName: TEST_PRODUCT.name,
+        unitAmount: TEST_PRODUCT.unitAmount,
+        currency: TEST_PRODUCT.currency,
+        mode: TEST_PRODUCT.mode,
+        entitlementKey: TEST_PRODUCT.entitlementKey,
+        appUserId: "app_user_test",
         successUrl: "https://app.example.com/payment/success",
         cancelUrl: "https://app.example.com/payment/cancel",
       }),
@@ -188,14 +220,26 @@ describe("Eazo Payments integration contract", () => {
     },
   );
 
+  it.each(["inactive", "pending", "active", "failed", "expired", "refunded", "disputed"] as const)(
+    "reads %s entitlement status from the Eazo ledger",
+    async (status) => {
+      mockPlatformResponse(200, mockEazoEntitlement(status, { product_key: TEST_PRODUCT.key }));
+      const result = await getEazoEntitlementStatus(TEST_PRODUCT.key, {
+        appUserId: "app_user_test",
+      });
+      expect(result.status).toBe(status);
+      expect(result.active).toBe(status === "active");
+    },
+  );
+
   it("fails clearly when server env is missing", () => {
     delete process.env.EAZO_APP_ID;
     expect(() =>
       buildEazoCheckoutRequest({
         productKey: "premium",
-        productName: "Premium unlock",
-        unitAmount: 499,
-        currency: "usd",
+        productName: TEST_PRODUCT.name,
+        unitAmount: TEST_PRODUCT.unitAmount,
+        currency: TEST_PRODUCT.currency,
         successUrl: "https://app.example.com/payment/success",
         cancelUrl: "https://app.example.com/payment/cancel",
       }),
@@ -222,6 +266,10 @@ function templateFiles(): TemplateFile[] {
     {
       filePath: "src/app/api/payments/status/route.ts",
       content: statusRouteTemplate(),
+    },
+    {
+      filePath: "src/app/api/payments/entitlements/route.ts",
+      content: entitlementRouteTemplate(),
     },
     {
       filePath: "src/app/payment/success/page.tsx",

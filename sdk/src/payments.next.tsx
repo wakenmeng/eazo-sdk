@@ -10,20 +10,25 @@ import {
   type EazoPaymentProduct,
   type EazoPaymentStatus,
 } from "./payments";
+import { getEazoPaymentSessionHeaders, refreshEazoEntitlement } from "./payments.react";
 import {
   createEazoCheckoutSession,
+  getEazoEntitlementStatus,
   getEazoPaymentStatus,
 } from "./payments.server";
+import { requireAuth } from "./server";
 
 type JsonBody = Record<string, unknown>;
 
 type RequestLike = {
   url: string;
+  headers: { get(name: string): string | null };
   json: () => Promise<unknown>;
 };
 
 export type EazoCheckoutRouteOptions = {
   getProduct: (productKey: string) => EazoPaymentProduct | null | undefined;
+  getUser?: (request: { headers: { get(name: string): string | null } }) => ReturnType<typeof requireAuth>;
 };
 
 function jsonResponse(body: JsonBody, init?: ResponseInit) {
@@ -51,6 +56,9 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
       return jsonResponse({ error: "Unknown product" }, { status: 400 });
     }
 
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
     try {
       const origin = getRequestOrigin(request);
       const checkout = await createEazoCheckoutSession({
@@ -58,9 +66,16 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
         productName: product.name,
         unitAmount: product.unitAmount,
         currency: product.currency,
+        mode: product.mode || "one_time",
+        entitlementKey: product.entitlementKey || product.key,
+        appUserId: authResult.user.id,
         successUrl: `${origin}/payment/success?product=${encodeURIComponent(product.key)}`,
         cancelUrl: `${origin}/payment/cancel?product=${encodeURIComponent(product.key)}`,
-        metadata: { product_key: product.key },
+        metadata: {
+          product_key: product.key,
+          entitlement_key: product.entitlementKey || product.key,
+          mode: product.mode || "one_time",
+        },
       });
 
       return jsonResponse(checkout);
@@ -79,16 +94,21 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
   };
 }
 
-export function createEazoPaymentStatusRoute() {
-  return async function GET(request: { url: string }) {
+export function createEazoPaymentStatusRoute(options: {
+  getUser?: (request: { headers: { get(name: string): string | null } }) => ReturnType<typeof requireAuth>;
+} = {}) {
+  return async function GET(request: { url: string; headers: { get(name: string): string | null } }) {
     const paymentId = new URL(request.url).searchParams.get("paymentId");
 
     if (!paymentId) {
       return jsonResponse({ error: "Missing paymentId" }, { status: 400 });
     }
 
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
     try {
-      const status = await getEazoPaymentStatus(paymentId);
+      const status = await getEazoPaymentStatus(paymentId, { appUserId: authResult.user.id });
       return jsonResponse(status as unknown as JsonBody);
     } catch (error) {
       if (error instanceof EazoPaymentApiError) {
@@ -99,6 +119,39 @@ export function createEazoPaymentStatusRoute() {
       }
       return jsonResponse(
         { error: error instanceof Error ? error.message : "Payment status failed" },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+export function createEazoEntitlementRoute(options: {
+  getUser?: (request: { headers: { get(name: string): string | null } }) => ReturnType<typeof requireAuth>;
+} = {}) {
+  return async function GET(request: { url: string; headers: { get(name: string): string | null } }) {
+    const productKey = new URL(request.url).searchParams.get("productKey");
+
+    if (!productKey) {
+      return jsonResponse({ error: "Missing productKey" }, { status: 400 });
+    }
+
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const entitlement = await getEazoEntitlementStatus(productKey, {
+        appUserId: authResult.user.id,
+      });
+      return jsonResponse(entitlement as unknown as JsonBody);
+    } catch (error) {
+      if (error instanceof EazoPaymentApiError) {
+        return jsonResponse(
+          { error: error.message, platform: error.body },
+          { status: error.status },
+        );
+      }
+      return jsonResponse(
+        { error: error instanceof Error ? error.message : "Payment entitlement failed" },
         { status: 500 },
       );
     }
@@ -134,7 +187,9 @@ export function EazoPaymentSuccessPage({
 
     async function poll() {
       attempts += 1;
+      const headers = await getEazoPaymentSessionHeaders();
       const response = await fetch(`/api/payments/status?paymentId=${encodeURIComponent(confirmedPaymentId)}`, {
+        headers,
         cache: "no-store",
       });
       const data = await response.json().catch(() => ({}));
@@ -148,6 +203,12 @@ export function EazoPaymentSuccessPage({
       const nextStatus = data as EazoPaymentStatus;
       setStatus(nextStatus);
       if (nextStatus.paid) {
+        const productKey =
+          nextStatus.entitlement?.product_key ||
+          nextStatus.metadata?.product_key ||
+          new URLSearchParams(window.location.search).get("product") ||
+          "premium";
+        await refreshEazoEntitlement(productKey);
         clearRememberedEazoPaymentId();
         return;
       }
@@ -157,7 +218,9 @@ export function EazoPaymentSuccessPage({
       }
     }
 
-    poll().catch(() => setError("Payment status failed"));
+    poll().catch((err) => {
+      setError(err instanceof Error ? err.message : "Payment status failed");
+    });
     return () => {
       cancelled = true;
     };

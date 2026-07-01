@@ -25,6 +25,10 @@
       "types": "./dist/payments.d.ts",
       "default": "./dist/payments.js"
     },
+    "./payments/react": {
+      "types": "./dist/payments.react.d.ts",
+      "default": "./dist/payments.react.js"
+    },
     "./payments/server": {
       "types": "./dist/payments.server.d.ts",
       "default": "./dist/payments.server.js"

@@ -1,9 +1,25 @@
+import { auth } from "./internal/capabilities/auth";
+
 export type EazoPaymentCurrency = "usd";
+
+export type EazoPaymentMode = "one_time" | "subscription";
+
+export type EazoPaymentInterval = "day" | "week" | "month" | "year";
 
 export type EazoPaymentStatusValue =
   | "pending"
   | "processing"
   | "succeeded"
+  | "failed"
+  | "expired"
+  | "refunded"
+  | "disputed";
+
+export type EazoEntitlementStatusValue =
+  | "inactive"
+  | "checking"
+  | "pending"
+  | "active"
   | "failed"
   | "expired"
   | "refunded"
@@ -16,6 +32,9 @@ export type EazoPaymentProduct = {
   name: string;
   unitAmount: number;
   currency: EazoPaymentCurrency;
+  mode?: EazoPaymentMode;
+  entitlementKey?: string;
+  interval?: EazoPaymentInterval;
 };
 
 export type CreateEazoCheckoutInput = {
@@ -25,6 +44,9 @@ export type CreateEazoCheckoutInput = {
   currency: EazoPaymentCurrency;
   successUrl: string;
   cancelUrl: string;
+  mode?: EazoPaymentMode;
+  entitlementKey?: string;
+  appUserId?: string;
   quantity?: number;
   metadata?: EazoPaymentMetadata;
   idempotencyKey?: string;
@@ -32,6 +54,10 @@ export type CreateEazoCheckoutInput = {
 
 export type EazoCheckoutSessionRequest = {
   app_id: string;
+  app_user_id?: string;
+  product_key: string;
+  entitlement_key: string;
+  mode: EazoPaymentMode;
   unit_amount: number;
   currency: EazoPaymentCurrency;
   product_name: string;
@@ -54,6 +80,20 @@ export type CreateEazoCheckoutResult = {
   paymentId: string;
 };
 
+export type EazoEntitlement = {
+  app_id: string;
+  app_user_id?: string;
+  product_key: string;
+  entitlement_key: string;
+  status: EazoEntitlementStatusValue;
+  active: boolean;
+  payment_id?: string | null;
+  source_payment_id?: string | null;
+  current_period_end?: number | null;
+  metadata?: EazoPaymentMetadata;
+  updated_at?: number | null;
+};
+
 export type EazoPaymentStatus = {
   payment_id: string;
   app_id: string;
@@ -63,6 +103,7 @@ export type EazoPaymentStatus = {
   currency: EazoPaymentCurrency;
   product_name: string;
   metadata: EazoPaymentMetadata;
+  entitlement?: EazoEntitlement | null;
 };
 
 export type EazoPaymentApiErrorBody = {
@@ -211,9 +252,15 @@ export async function startEazoCheckout(
     window.location.assign(checkoutUrl);
   },
 ) {
+  await auth.login();
+  const sessionHeader = await auth.getSessionHeader();
+
   const response = await fetch("/api/payments/checkout", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionHeader ? { "x-eazo-session": sessionHeader } : {}),
+    },
     body: JSON.stringify({ productKey }),
   });
   const data = await response.json().catch(() => ({}));
