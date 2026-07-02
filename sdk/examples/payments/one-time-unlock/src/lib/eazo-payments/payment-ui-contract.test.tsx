@@ -14,6 +14,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@eazo/sdk/payments/react", () => ({
+  EazoPaymentUnlockPanel: ({
+    title = "Premium unlock",
+    ctaLabel = "Unlock premium"
+  }: {
+    title?: React.ReactNode;
+    ctaLabel?: React.ReactNode;
+  }) => (
+    <section data-eazo-payment-status="inactive">
+      <h2>{title}</h2>
+      <button type="button" onClick={() => mocks.checkout()}>
+        {ctaLabel}
+      </button>
+    </section>
+  ),
   EazoPaymentLifecycle: ({ children }: { children: (payment: unknown) => React.ReactNode }) =>
     children({
       productKey: "premium",

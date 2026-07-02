@@ -4,6 +4,7 @@ import {
   assertEazoPaymentProductKey,
   EAZO_PAYMENT_MODE,
   EazoPaymentApiError,
+  normalizeEazoCheckoutResult,
   type CreateEazoCheckoutInput,
   type CreateEazoCheckoutResult,
   type EazoCheckoutSessionRequest,
@@ -124,11 +125,12 @@ export async function createEazoCheckoutSession(
     throw new EazoPaymentApiError(response.status, data, "Checkout failed");
   }
 
-  return {
-    checkoutSessionId: data.checkout_session_id,
-    checkoutUrl: data.checkout_url,
-    paymentId: data.payment_id,
-  };
+  const checkout = normalizeEazoCheckoutResult(data);
+  if (!checkout) {
+    throw new EazoPaymentApiError(response.status, data, "Checkout response missing checkoutUrl or paymentId");
+  }
+
+  return checkout;
 }
 
 export async function getEazoPaymentStatus(

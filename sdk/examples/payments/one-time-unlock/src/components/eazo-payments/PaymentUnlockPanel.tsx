@@ -2,66 +2,23 @@
 
 import * as React from "react";
 import {
-  EazoPaymentLifecycle,
-  type EazoPaymentLifecycleState
+  EazoPaymentUnlockPanel,
+  type EazoPaymentUnlockPanelProps,
+  EazoPaymentLifecycle
 } from "@eazo/sdk/payments/react";
 
-export type PaymentUnlockPanelProps = {
-  productKey?: string;
-  title?: React.ReactNode;
-  description?: React.ReactNode;
-  ctaLabel?: React.ReactNode;
-  activeLabel?: React.ReactNode;
-  pendingLabel?: React.ReactNode;
-  className?: string;
-  children?: (payment: EazoPaymentLifecycleState) => React.ReactNode;
-};
+export type PaymentUnlockPanelProps = EazoPaymentUnlockPanelProps;
 
-export function PaymentUnlockPanel({
-  productKey = "premium",
-  title = "Premium unlock",
-  description = "Unlock the paid experience for this app.",
-  ctaLabel = "Unlock premium",
-  activeLabel = "Premium active",
-  pendingLabel = "Payment pending",
-  className,
-  children
-}: PaymentUnlockPanelProps) {
+export function PaymentUnlockPanel(props: PaymentUnlockPanelProps) {
   return (
-    <EazoPaymentLifecycle productKey={productKey}>
-      {(payment) => {
-        if (children) return children(payment);
-
-        const disabled = payment.active || payment.checking || payment.starting || payment.pending;
-        const label = payment.active
-          ? activeLabel
-          : payment.starting
-            ? "Opening checkout..."
-            : payment.pending
-              ? pendingLabel
-              : ctaLabel;
-
-        return (
-          <section className={className} data-eazo-payment-status={payment.status}>
-            <div>
-              <h2>{title}</h2>
-              <p>{description}</p>
-            </div>
-            <button
-              type="button"
-              disabled={disabled}
-              aria-busy={payment.checking || payment.starting}
-              onClick={() => {
-                void payment.checkout();
-              }}
-            >
-              {label}
-            </button>
-            {payment.error ? <p role="alert">{payment.error}</p> : null}
-          </section>
-        );
-      }}
-    </EazoPaymentLifecycle>
+    <EazoPaymentUnlockPanel
+      title="Premium unlock"
+      description="Unlock the paid experience for this app."
+      ctaLabel="Unlock premium"
+      activeLabel="Premium active"
+      pendingLabel="Payment pending"
+      {...props}
+    />
   );
 }
 

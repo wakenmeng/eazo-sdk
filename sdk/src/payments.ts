@@ -103,6 +103,12 @@ export type EazoCheckoutSessionResponse = {
   payment_id: string;
 };
 
+export type EazoCheckoutSessionResponseLike = Partial<EazoCheckoutSessionResponse> & {
+  checkoutSessionId?: unknown;
+  checkoutUrl?: unknown;
+  paymentId?: unknown;
+};
+
 export type CreateEazoCheckoutResult = {
   checkoutSessionId: string;
   checkoutUrl: string;
@@ -325,7 +331,35 @@ export function readEazoPaymentIdFromUrl(
   const query = search.startsWith("http")
     ? new URL(search).search
     : search;
-  return new URLSearchParams(query).get("payment_id");
+  const params = new URLSearchParams(query);
+  return params.get("payment_id") || params.get("paymentId");
+}
+
+function readStringField(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function normalizeEazoCheckoutResult(
+  data: EazoCheckoutSessionResponseLike,
+): CreateEazoCheckoutResult | null {
+  const checkoutSessionId =
+    readStringField(data.checkout_session_id) ||
+    readStringField(data.checkoutSessionId) ||
+    "";
+  const checkoutUrl =
+    readStringField(data.checkout_url) ||
+    readStringField(data.checkoutUrl);
+  const paymentId =
+    readStringField(data.payment_id) ||
+    readStringField(data.paymentId);
+
+  if (!checkoutUrl || !paymentId) return null;
+
+  return {
+    checkoutSessionId,
+    checkoutUrl,
+    paymentId,
+  };
 }
 
 function checkoutErrorMessage(data: unknown) {
@@ -351,11 +385,12 @@ export async function startEazoCheckout(
     body: JSON.stringify({ productKey }),
   });
   const data = await response.json().catch(() => ({}));
+  const checkout = normalizeEazoCheckoutResult(data as EazoCheckoutSessionResponseLike);
 
-  if (!response.ok || !data.checkoutUrl || !data.paymentId) {
+  if (!response.ok || !checkout) {
     throw new Error(checkoutErrorMessage(data));
   }
 
-  rememberEazoPaymentId(data.paymentId);
-  redirect(data.checkoutUrl);
+  rememberEazoPaymentId(checkout.paymentId);
+  redirect(checkout.checkoutUrl);
 }

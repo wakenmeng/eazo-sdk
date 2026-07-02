@@ -103,66 +103,23 @@ function paymentUnlockPanelTemplate() {
 
 import * as React from "react";
 import {
-  EazoPaymentLifecycle,
-  type EazoPaymentLifecycleState,
+  EazoPaymentUnlockPanel,
+  type EazoPaymentUnlockPanelProps,
 } from "@eazo/sdk/payments/react";
+import { EazoPaymentLifecycle } from "@eazo/sdk/payments/react";
 
-export type PaymentUnlockPanelProps = {
-  productKey?: string;
-  title?: React.ReactNode;
-  description?: React.ReactNode;
-  ctaLabel?: React.ReactNode;
-  activeLabel?: React.ReactNode;
-  pendingLabel?: React.ReactNode;
-  className?: string;
-  children?: (payment: EazoPaymentLifecycleState) => React.ReactNode;
-};
+export type PaymentUnlockPanelProps = EazoPaymentUnlockPanelProps;
 
-export function PaymentUnlockPanel({
-  productKey = "premium",
-  title = "Premium unlock",
-  description = "Unlock the paid experience for this app.",
-  ctaLabel = "Unlock premium",
-  activeLabel = "Premium active",
-  pendingLabel = "Payment pending",
-  className,
-  children,
-}: PaymentUnlockPanelProps) {
+export function PaymentUnlockPanel(props: PaymentUnlockPanelProps) {
   return (
-    <EazoPaymentLifecycle productKey={productKey}>
-      {(payment) => {
-        if (children) return children(payment);
-
-        const disabled = payment.active || payment.checking || payment.starting || payment.pending;
-        const label = payment.active
-          ? activeLabel
-          : payment.starting
-            ? "Opening checkout..."
-            : payment.pending
-              ? pendingLabel
-              : ctaLabel;
-
-        return (
-          <section className={className} data-eazo-payment-status={payment.status}>
-            <div>
-              <h2>{title}</h2>
-              <p>{description}</p>
-            </div>
-            <button
-              type="button"
-              disabled={disabled}
-              aria-busy={payment.checking || payment.starting}
-              onClick={() => {
-                void payment.checkout();
-              }}
-            >
-              {label}
-            </button>
-            {payment.error ? <p role="alert">{payment.error}</p> : null}
-          </section>
-        );
-      }}
-    </EazoPaymentLifecycle>
+    <EazoPaymentUnlockPanel
+      title="Premium unlock"
+      description="Unlock the paid experience for this app."
+      ctaLabel="Unlock premium"
+      activeLabel="Premium active"
+      pendingLabel="Payment pending"
+      {...props}
+    />
   );
 }
 
@@ -491,6 +448,27 @@ describe("Eazo Payments integration contract", () => {
     );
   });
 
+  it("accepts Stripe return payment_id on the local status route", async () => {
+    mockPlatformResponse(200, mockEazoPaymentStatus("succeeded"));
+    const GET = createEazoPaymentStatusRoute({
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null },
+      }),
+    });
+
+    const response = await GET(new Request("https://app.example.com/api/payments/status?payment_id=cap_test_eazo"));
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://creator.dev1.eazo.ai/api/open/payments/cap_test_eazo/status?app_id=app_test&app_user_id=app_user_test",
+      {
+        headers: { Authorization: "Bearer eazo_private_test" },
+        cache: "no-store",
+      },
+    );
+  });
+
   it("handles the local entitlement route request and response contract", async () => {
     mockPlatformResponse(200, mockEazoEntitlement("active", { product_key: TEST_PRODUCT.key }));
     const GET = createEazoEntitlementRoute({
@@ -515,6 +493,30 @@ describe("Eazo Payments integration contract", () => {
     );
   });
 
+  it.each(["productKey", "product_key", "key"] as const)(
+    "accepts %s on the local entitlement route",
+    async (paramName) => {
+      mockPlatformResponse(200, mockEazoEntitlement("active", { product_key: TEST_PRODUCT.key }));
+      const GET = createEazoEntitlementRoute({
+        getUser: () => ({
+          ok: true,
+          user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null },
+        }),
+      });
+
+      const response = await GET(new Request(\`https://app.example.com/api/payments/entitlements?\${paramName}=\${TEST_PRODUCT.key}\`));
+
+      expect(response.status).toBe(200);
+      expect(fetch).toHaveBeenCalledWith(
+        \`https://creator.dev1.eazo.ai/api/open/payments/entitlements?app_id=app_test&product_key=\${TEST_PRODUCT.key}&app_user_id=app_user_test\`,
+        {
+          headers: { Authorization: "Bearer eazo_private_test" },
+          cache: "no-store",
+        },
+      );
+    },
+  );
+
   it("rejects malformed local payment route requests", async () => {
     const checkoutPOST = createEazoCheckoutRoute({ getProduct: getPaymentProduct });
     const statusGET = createEazoPaymentStatusRoute();
@@ -530,12 +532,18 @@ describe("Eazo Payments integration contract", () => {
     await expect(
       statusGET(new Request("https://app.example.com/api/payments/status"))
         .then((response) => response.json().then((body) => ({ status: response.status, body }))),
-    ).resolves.toEqual({ status: 400, body: { error: "Missing paymentId" } });
+    ).resolves.toEqual({
+      status: 400,
+      body: { error: "Missing paymentId", accepted: ["paymentId", "payment_id"] },
+    });
 
     await expect(
       entitlementGET(new Request("https://app.example.com/api/payments/entitlements"))
         .then((response) => response.json().then((body) => ({ status: response.status, body }))),
-    ).resolves.toEqual({ status: 400, body: { error: "Missing productKey" } });
+    ).resolves.toEqual({
+      status: 400,
+      body: { error: "Missing productKey", accepted: ["productKey", "product_key", "key"] },
+    });
   });
 
   it("fails clearly when server env is missing", () => {
@@ -570,6 +578,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@eazo/sdk/payments/react", () => ({
+  EazoPaymentUnlockPanel: ({
+    title = "Premium unlock",
+    ctaLabel = "Unlock premium",
+  }: {
+    title?: React.ReactNode;
+    ctaLabel?: React.ReactNode;
+  }) => (
+    <section data-eazo-payment-status="inactive">
+      <h2>{title}</h2>
+      <button type="button" onClick={() => mocks.checkout()}>
+        {ctaLabel}
+      </button>
+    </section>
+  ),
   EazoPaymentLifecycle: ({ children }: { children: (payment: unknown) => React.ReactNode }) =>
     children({
       productKey: "premium",

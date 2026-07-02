@@ -64,9 +64,11 @@ Rules:
 ### `PaymentUnlockPanel.tsx`
 
 This is the reusable UI shell. Generated apps may edit markup, classes, and
-text, but the payment lifecycle must stay inside `EazoPaymentLifecycle`.
+text, but the payment lifecycle must stay inside SDK components. The scaffolded
+panel wraps `EazoPaymentUnlockPanel`; custom layouts can use its render prop or
+`EazoPaymentLifecycle`.
 
-`EazoPaymentLifecycle` owns:
+The SDK lifecycle owns:
 
 - app user login via Eazo Auth
 - entitlement checking
@@ -75,13 +77,9 @@ text, but the payment lifecycle must stay inside `EazoPaymentLifecycle`.
 - pending, active, failed, refunded, and disputed states
 - visible error state
 
-The default button calls only:
+The default button calls only the SDK-owned checkout action:
 
-```tsx
-void payment.checkout();
-```
-
-Do not replace this with `fetch("/api/payments/checkout")`, `data.url`,
+Do not replace it with `fetch("/api/payments/checkout")`, `data.url`,
 `window.open`, or Stripe SDK calls.
 
 ### Local API Routes
@@ -101,6 +99,10 @@ contract:
 - `POST /api/payments/checkout`
 - `GET /api/payments/status?paymentId=...`
 - `GET /api/payments/entitlements?productKey=...`
+
+The route helpers also accept compatibility aliases such as `payment_id`,
+`product_key`, and `key`, but generated app UI should still call them only
+through SDK lifecycle components.
 
 Generated app UI should call these only through SDK lifecycle components.
 

@@ -271,6 +271,13 @@ describe("Eazo Payments integration contract", () => {
     expect(statusResponse.status).toBe(200);
     assertEazoPaymentStatusContract(await statusResponse.json());
 
+    mockPlatformResponse(200, mockEazoPaymentStatus("succeeded"));
+    const stripeStyleStatusResponse = await statusGET(
+      new Request("https://app.example.com/api/payments/status?payment_id=cap_test_eazo")
+    );
+    expect(stripeStyleStatusResponse.status).toBe(200);
+    assertEazoPaymentStatusContract(await stripeStyleStatusResponse.json());
+
     mockPlatformResponse(200, mockEazoEntitlement("active", { product_key: TEST_PRODUCT.key }));
     const entitlementGET = createEazoEntitlementRoute({
       getUser: () => ({
@@ -283,5 +290,14 @@ describe("Eazo Payments integration contract", () => {
     );
     expect(entitlementResponse.status).toBe(200);
     assertEazoEntitlementContract(await entitlementResponse.json());
+
+    for (const paramName of ["product_key", "key"] as const) {
+      mockPlatformResponse(200, mockEazoEntitlement("active", { product_key: TEST_PRODUCT.key }));
+      const aliasResponse = await entitlementGET(
+        new Request(`https://app.example.com/api/payments/entitlements?${paramName}=${TEST_PRODUCT.key}`)
+      );
+      expect(aliasResponse.status).toBe(200);
+      assertEazoEntitlementContract(await aliasResponse.json());
+    }
   });
 });

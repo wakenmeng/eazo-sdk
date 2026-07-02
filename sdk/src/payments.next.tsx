@@ -46,11 +46,28 @@ function getRequestOrigin(request: { url: string }) {
   return new URL(request.url).origin;
 }
 
+function firstSearchParam(params: URLSearchParams, names: readonly string[]) {
+  for (const name of names) {
+    const value = params.get(name);
+    if (value) return value;
+  }
+  return null;
+}
+
+function firstBodyString(body: JsonBody, names: readonly string[]) {
+  for (const name of names) {
+    const value = body[name];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
 export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
   return async function POST(request: RequestLike) {
     const body = await request.json().catch(() => ({}));
     const bodyRecord = body && typeof body === "object" ? body as JsonBody : {};
-    const product = options.getProduct(String(bodyRecord.productKey || "premium"));
+    const productKey = firstBodyString(bodyRecord, ["productKey", "product_key", "key"]) || "premium";
+    const product = options.getProduct(productKey);
 
     if (!product) {
       return jsonResponse({ error: "Unknown product" }, { status: 400 });
@@ -98,10 +115,16 @@ export function createEazoPaymentStatusRoute(options: {
   getUser?: (request: { headers: { get(name: string): string | null } }) => ReturnType<typeof requireAuth>;
 } = {}) {
   return async function GET(request: { url: string; headers: { get(name: string): string | null } }) {
-    const paymentId = new URL(request.url).searchParams.get("paymentId");
+    const paymentId = firstSearchParam(
+      new URL(request.url).searchParams,
+      ["paymentId", "payment_id"],
+    );
 
     if (!paymentId) {
-      return jsonResponse({ error: "Missing paymentId" }, { status: 400 });
+      return jsonResponse(
+        { error: "Missing paymentId", accepted: ["paymentId", "payment_id"] },
+        { status: 400 },
+      );
     }
 
     const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
@@ -129,10 +152,16 @@ export function createEazoEntitlementRoute(options: {
   getUser?: (request: { headers: { get(name: string): string | null } }) => ReturnType<typeof requireAuth>;
 } = {}) {
   return async function GET(request: { url: string; headers: { get(name: string): string | null } }) {
-    const productKey = new URL(request.url).searchParams.get("productKey");
+    const productKey = firstSearchParam(
+      new URL(request.url).searchParams,
+      ["productKey", "product_key", "key"],
+    );
 
     if (!productKey) {
-      return jsonResponse({ error: "Missing productKey" }, { status: 400 });
+      return jsonResponse(
+        { error: "Missing productKey", accepted: ["productKey", "product_key", "key"] },
+        { status: 400 },
+      );
     }
 
     const authResult = options.getUser ? options.getUser(request) : requireAuth(request);

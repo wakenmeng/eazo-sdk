@@ -10,6 +10,7 @@ import {
   EAZO_PAYMENT_CURRENCY,
   EAZO_PAYMENT_MODE,
   clearRememberedEazoPaymentId,
+  normalizeEazoCheckoutResult,
   readEazoPaymentIdFromUrl,
   readRememberedEazoPaymentId,
   rememberEazoPaymentId,
@@ -325,6 +326,55 @@ describe("Eazo Payments SDK", () => {
     expect(redirect).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test");
   });
 
+  it("normalizes local checkout responses from snake_case or camelCase fields", async () => {
+    expect(
+      normalizeEazoCheckoutResult({
+        checkout_session_id: "cs_test_snake",
+        checkout_url: "https://checkout.stripe.com/c/pay/cs_test_snake",
+        payment_id: "cap_snake",
+      }),
+    ).toEqual({
+      checkoutSessionId: "cs_test_snake",
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_snake",
+      paymentId: "cap_snake",
+    });
+
+    expect(
+      normalizeEazoCheckoutResult({
+        checkoutSessionId: "cs_test_camel",
+        checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_camel",
+        paymentId: "cap_camel",
+      }),
+    ).toEqual({
+      checkoutSessionId: "cs_test_camel",
+      checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_camel",
+      paymentId: "cap_camel",
+    });
+
+    expect(normalizeEazoCheckoutResult({ checkoutUrl: "https://checkout.stripe.com" })).toBeNull();
+  });
+
+  it("starts checkout when the local route returns platform-shaped snake_case fields", async () => {
+    vi.spyOn(auth, "login").mockResolvedValue({
+      id: "user_test",
+      email: "test@example.com",
+      name: "Test",
+      avatarUrl: null,
+    });
+    vi.spyOn(auth, "getSessionHeader").mockResolvedValue("session_test");
+    mockPlatformResponse(200, mockEazoCheckoutResponse({
+      checkout_session_id: "cs_test_snake",
+      checkout_url: "https://checkout.stripe.com/c/pay/cs_test_snake",
+      payment_id: "cap_snake",
+    }));
+    const redirect = vi.fn();
+
+    await startEazoCheckout("premium", redirect);
+
+    expect(readRememberedEazoPaymentId()).toBe("cap_snake");
+    expect(redirect).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test_snake");
+  });
+
   it("requires login before starting checkout", async () => {
     const login = vi.spyOn(auth, "login").mockResolvedValue({
       id: "user_test",
@@ -380,6 +430,8 @@ describe("Eazo Payments SDK", () => {
     clearRememberedEazoPaymentId();
     expect(readRememberedEazoPaymentId()).toBeNull();
     expect(readEazoPaymentIdFromUrl("?payment_id=cap_url")).toBe("cap_url");
+    expect(readEazoPaymentIdFromUrl("?paymentId=cap_camel")).toBe("cap_camel");
+    expect(readEazoPaymentIdFromUrl("?payment_id=cap_snake&paymentId=cap_camel")).toBe("cap_snake");
   });
 
   it("refreshes entitlement from the app-local route and caches active state", async () => {
@@ -558,6 +610,27 @@ describe("Eazo Payments SDK", () => {
     );
   });
 
+  it("accepts Stripe-style payment_id on the local status route", async () => {
+    mockPlatformResponse(200, mockEazoPaymentStatus("succeeded"));
+    const GET = createEazoPaymentStatusRoute({
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null },
+      }),
+    });
+
+    const response = await GET(new Request("https://app.example.com/api/payments/status?payment_id=cap_test_eazo"));
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://creator.dev1.eazo.ai/api/open/payments/cap_test_eazo/status?app_id=app_test&app_user_id=app_user_test",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer eazo_private_test" },
+        cache: "no-store",
+      }),
+    );
+  });
+
   it("creates Next entitlement route handlers that require app user session", async () => {
     mockPlatformResponse(200, mockEazoEntitlement("active"));
     const GET = createEazoEntitlementRoute({
@@ -585,6 +658,53 @@ describe("Eazo Payments SDK", () => {
     );
   });
 
+  it.each(["productKey", "product_key", "key"] as const)(
+    "accepts %s on the local entitlement route",
+    async (paramName) => {
+      mockPlatformResponse(200, mockEazoEntitlement("active"));
+      const GET = createEazoEntitlementRoute({
+        getUser: () => ({
+          ok: true,
+          user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null },
+        }),
+      });
+
+      const response = await GET(
+        new Request(`https://app.example.com/api/payments/entitlements?${paramName}=premium`),
+      );
+
+      expect(response.status).toBe(200);
+      expect(fetch).toHaveBeenCalledWith(
+        "https://creator.dev1.eazo.ai/api/open/payments/entitlements?app_id=app_test&product_key=premium&app_user_id=app_user_test",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer eazo_private_test" },
+          cache: "no-store",
+        }),
+      );
+    },
+  );
+
+  it("returns clear local payment route validation errors", async () => {
+    const statusGET = createEazoPaymentStatusRoute();
+    const entitlementGET = createEazoEntitlementRoute();
+
+    await expect(
+      statusGET(new Request("https://app.example.com/api/payments/status"))
+        .then((response) => response.json().then((body) => ({ status: response.status, body }))),
+    ).resolves.toEqual({
+      status: 400,
+      body: { error: "Missing paymentId", accepted: ["paymentId", "payment_id"] },
+    });
+
+    await expect(
+      entitlementGET(new Request("https://app.example.com/api/payments/entitlements"))
+        .then((response) => response.json().then((body) => ({ status: response.status, body }))),
+    ).resolves.toEqual({
+      status: 400,
+      body: { error: "Missing productKey", accepted: ["productKey", "product_key", "key"] },
+    });
+  });
+
   it("scaffolds thin Next payment files", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-"));
     const result = scaffoldPayments({ cwd });
@@ -605,7 +725,7 @@ describe("Eazo Payments SDK", () => {
       path.join(cwd, "src/components/eazo-payments/PaymentUnlockPanel.tsx"),
       "utf8",
     );
-    expect(panel).toContain("EazoPaymentLifecycle");
+    expect(panel).toContain("EazoPaymentUnlockPanel");
     assertNoLegacyPaymentFlowSource(panel, "PaymentUnlockPanel.tsx");
     const uiTest = fs.readFileSync(
       path.join(cwd, "src/lib/eazo-payments/payment-ui-contract.test.tsx"),
