@@ -42,8 +42,79 @@ function jsonResponse(body: JsonBody, init?: ResponseInit) {
   });
 }
 
-function getRequestOrigin(request: { url: string }) {
-  return new URL(request.url).origin;
+function firstHeaderValue(value: string | null) {
+  return value?.split(",")[0]?.trim() || null;
+}
+
+function forwardedHeaderPart(forwarded: string | null, key: string) {
+  const first = firstHeaderValue(forwarded);
+  if (!first) return null;
+  for (const segment of first.split(";")) {
+    const [rawName, ...rawValueParts] = segment.split("=");
+    if (rawName?.trim().toLowerCase() !== key) continue;
+    const value = rawValueParts.join("=").trim().replace(/^"|"$/g, "");
+    return value || null;
+  }
+  return null;
+}
+
+function normalizeOriginCandidate(candidate: string | null) {
+  if (!candidate) return null;
+  try {
+    const value = candidate.includes("://") ? candidate : `https://${candidate}`;
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    if (isLocalCheckoutHost(url.hostname)) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalCheckoutHost(hostname: string) {
+  const host = hostname.toLowerCase();
+  return host === "0.0.0.0" ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".localhost");
+}
+
+function envPublicOrigin() {
+  if (typeof process === "undefined" || !process.env) return null;
+  return normalizeOriginCandidate(
+    process.env.EAZO_APP_PUBLIC_URL ||
+    process.env.NEXT_PUBLIC_EAZO_APP_PUBLIC_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    null,
+  );
+}
+
+function getRequestOrigin(request: { url: string; headers: { get(name: string): string | null } }) {
+  const forwardedHost = forwardedHeaderPart(request.headers.get("forwarded"), "host");
+  const forwardedProto = forwardedHeaderPart(request.headers.get("forwarded"), "proto");
+  const xForwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const xForwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+  const host = firstHeaderValue(request.headers.get("host"));
+
+  const headerOrigin =
+    normalizeOriginCandidate(`${forwardedProto || xForwardedProto || "https"}://${forwardedHost || xForwardedHost || ""}`) ||
+    normalizeOriginCandidate(forwardedHost || xForwardedHost) ||
+    normalizeOriginCandidate(request.headers.get("origin")) ||
+    normalizeOriginCandidate(request.headers.get("referer")) ||
+    envPublicOrigin() ||
+    normalizeOriginCandidate(host) ||
+    normalizeOriginCandidate(request.url);
+
+  if (!headerOrigin) {
+    throw new Error(
+      "Unable to resolve public app origin for checkout return URL. " +
+      "Set EAZO_APP_PUBLIC_URL or ensure x-forwarded-host/x-forwarded-proto reaches the app route.",
+    );
+  }
+
+  return headerOrigin;
 }
 
 function firstSearchParam(params: URLSearchParams, names: readonly string[]) {

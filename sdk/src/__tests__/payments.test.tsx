@@ -579,8 +579,44 @@ describe("Eazo Payments SDK", () => {
     expect(body).toHaveProperty("product_name", "Premium unlock");
     expect(body).toHaveProperty("app_user_id", "app_user_test");
     expect(body).toHaveProperty("entitlement_key", "premium");
+    expect(body).toHaveProperty("success_url", "https://app.example.com/payment/success?product=premium");
+    expect(body).toHaveProperty("cancel_url", "https://app.example.com/payment/cancel?product=premium");
     expect(body).not.toHaveProperty("amount");
     expect(body).not.toHaveProperty("title");
+  });
+
+  it("derives checkout return URLs from proxy headers instead of E2B local listener origins", async () => {
+    mockPlatformResponse(200, mockEazoCheckoutResponse());
+    const POST = createEazoCheckoutRoute({
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null },
+      }),
+      getProduct: () => ({
+        key: "premium",
+        name: "Premium unlock",
+        unitAmount: 499,
+        currency: "usd",
+      }),
+    });
+
+    const response = await POST(new Request("http://0.0.0.0:3000/api/payments/checkout", {
+      method: "POST",
+      headers: {
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "3000-i3oy5n5r1j67jd3jn609o.e2b.app",
+      },
+      body: JSON.stringify({ productKey: "premium" }),
+    }));
+
+    expect(response.status).toBe(200);
+    const [, request] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    assertEazoCheckoutRequestContract(body);
+    expect(body.success_url).toBe("https://3000-i3oy5n5r1j67jd3jn609o.e2b.app/payment/success?product=premium");
+    expect(body.cancel_url).toBe("https://3000-i3oy5n5r1j67jd3jn609o.e2b.app/payment/cancel?product=premium");
+    expect(body.success_url).not.toContain("0.0.0.0");
+    expect(body.cancel_url).not.toContain("0.0.0.0");
   });
 
   it("creates Next status route handlers with exact request and response contract", async () => {

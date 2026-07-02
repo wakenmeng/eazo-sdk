@@ -257,6 +257,11 @@ describe("Eazo Payments integration contract", () => {
 
     expect(checkoutResponse.status).toBe(200);
     assertCreateEazoCheckoutResultContract(await checkoutResponse.json());
+    const [, checkoutRequest] = vi.mocked(fetch).mock.calls[0];
+    const checkoutBody = JSON.parse(String(checkoutRequest?.body));
+    assertEazoCheckoutRequestContract(checkoutBody);
+    expect(checkoutBody.success_url).toBe(`https://app.example.com/payment/success?product=${TEST_PRODUCT.key}`);
+    expect(checkoutBody.cancel_url).toBe(`https://app.example.com/payment/cancel?product=${TEST_PRODUCT.key}`);
 
     mockPlatformResponse(200, mockEazoPaymentStatus("succeeded"));
     const statusGET = createEazoPaymentStatusRoute({
@@ -299,5 +304,34 @@ describe("Eazo Payments integration contract", () => {
       expect(aliasResponse.status).toBe(200);
       assertEazoEntitlementContract(await aliasResponse.json());
     }
+  });
+
+  it("uses public proxy headers for Stripe return URLs in E2B previews", async () => {
+    mockPlatformResponse(200, mockEazoCheckoutResponse());
+    const POST = createEazoCheckoutRoute({
+      getProduct: getPaymentProduct,
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null }
+      })
+    });
+
+    const checkoutResponse = await POST(new Request("http://0.0.0.0:3000/api/payments/checkout", {
+      method: "POST",
+      headers: {
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "3000-preview.e2b.app"
+      },
+      body: JSON.stringify({ productKey: TEST_PRODUCT.key })
+    }));
+
+    expect(checkoutResponse.status).toBe(200);
+    const [, checkoutRequest] = vi.mocked(fetch).mock.calls[0];
+    const checkoutBody = JSON.parse(String(checkoutRequest?.body));
+    assertEazoCheckoutRequestContract(checkoutBody);
+    expect(checkoutBody.success_url).toBe(`https://3000-preview.e2b.app/payment/success?product=${TEST_PRODUCT.key}`);
+    expect(checkoutBody.cancel_url).toBe(`https://3000-preview.e2b.app/payment/cancel?product=${TEST_PRODUCT.key}`);
+    expect(checkoutBody.success_url).not.toContain("0.0.0.0");
+    expect(checkoutBody.cancel_url).not.toContain("0.0.0.0");
   });
 });
