@@ -42,6 +42,18 @@ export type EazoEntitlementGateProps = {
   inactiveStatuses?: EazoEntitlementStatusValue[];
 };
 
+export type EazoPaymentLifecycleState = EazoEntitlementState & {
+  productKey: string;
+  starting: boolean;
+  pending: boolean;
+  checkout: () => Promise<void>;
+};
+
+export type EazoPaymentLifecycleProps = {
+  productKey?: string;
+  children: (payment: EazoPaymentLifecycleState) => React.ReactNode;
+};
+
 function inactiveEntitlement(productKey: string): EazoEntitlement {
   return {
     app_id: "",
@@ -182,6 +194,45 @@ export function useEazoEntitlement(productKey = "premium"): EazoEntitlementState
   };
 }
 
+export function useEazoPaymentLifecycle(productKey = "premium"): EazoPaymentLifecycleState {
+  const entitlement = useEazoEntitlement(productKey);
+  const [starting, setStarting] = React.useState(false);
+  const [checkoutError, setCheckoutError] = React.useState<string | null>(null);
+
+  const checkout = React.useCallback(async () => {
+    if (entitlement.active) return;
+
+    setStarting(true);
+    setCheckoutError(null);
+    try {
+      await startEazoCheckout(productKey);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Checkout failed";
+      setCheckoutError(message);
+      throw err instanceof Error ? err : new Error(message);
+    } finally {
+      setStarting(false);
+    }
+  }, [entitlement.active, productKey]);
+
+  return {
+    ...entitlement,
+    productKey,
+    starting,
+    pending: entitlement.status === "pending",
+    error: checkoutError || entitlement.error,
+    checkout,
+  };
+}
+
+export function EazoPaymentLifecycle({
+  productKey = "premium",
+  children,
+}: EazoPaymentLifecycleProps) {
+  const payment = useEazoPaymentLifecycle(productKey);
+  return <>{children(payment)}</>;
+}
+
 export function EazoPaymentButton({
   productKey = "premium",
   children = "Unlock premium",
@@ -191,29 +242,22 @@ export function EazoPaymentButton({
   onUnlockedClick,
   ...buttonProps
 }: EazoPaymentButtonProps) {
-  const entitlement = useEazoEntitlement(productKey);
-  const [starting, setStarting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const payment = useEazoPaymentLifecycle(productKey);
 
   async function handleClick() {
-    if (entitlement.active) {
+    if (payment.active) {
       onUnlockedClick?.();
       return;
     }
-    setStarting(true);
-    setError(null);
     try {
-      await startEazoCheckout(productKey);
+      await payment.checkout();
     } catch (err) {
       const checkoutError = err instanceof Error ? err : new Error("Checkout failed");
-      setError(checkoutError.message);
       onCheckoutError?.(checkoutError);
-    } finally {
-      setStarting(false);
     }
   }
 
-  const isDisabled = Boolean(disabled || starting || entitlement.checking);
+  const isDisabled = Boolean(disabled || payment.starting || payment.checking);
 
   return (
     <>
@@ -221,14 +265,14 @@ export function EazoPaymentButton({
         {...buttonProps}
         type={buttonProps.type || "button"}
         disabled={isDisabled}
-        aria-busy={starting || entitlement.checking}
-        data-eazo-payment-status={entitlement.status}
+        aria-busy={payment.starting || payment.checking}
+        data-eazo-payment-status={payment.status}
         onClick={handleClick}
       >
-        {entitlement.active ? unlockedChildren : starting ? "Opening checkout..." : children}
+        {payment.active ? unlockedChildren : payment.starting ? "Opening checkout..." : children}
       </button>
-      {(error || entitlement.error) ? (
-        <p role="alert">{error || entitlement.error}</p>
+      {payment.error ? (
+        <p role="alert">{payment.error}</p>
       ) : null}
     </>
   );

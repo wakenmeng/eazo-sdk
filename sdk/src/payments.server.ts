@@ -1,4 +1,8 @@
 import {
+  assertEazoPaymentCurrency,
+  assertEazoPaymentMode,
+  assertEazoPaymentProductKey,
+  EAZO_PAYMENT_MODE,
   EazoPaymentApiError,
   type CreateEazoCheckoutInput,
   type CreateEazoCheckoutResult,
@@ -59,7 +63,21 @@ export function buildEazoCheckoutRequest(
   const { appId } = requireEazoPaymentEnv();
   const productKey = input.productKey;
   const entitlementKey = input.entitlementKey || productKey;
-  const mode = input.mode || "one_time";
+  const mode = input.mode || EAZO_PAYMENT_MODE.ONE_TIME;
+
+  assertEazoPaymentProductKey(productKey, "product key");
+  assertEazoPaymentProductKey(entitlementKey, "entitlement key");
+  assertEazoPaymentMode(mode);
+  assertEazoPaymentCurrency(input.currency);
+  if (!Number.isInteger(input.unitAmount) || input.unitAmount <= 0) {
+    throw new Error("unitAmount must be a positive integer in cents");
+  }
+  if (input.quantity !== undefined && (!Number.isInteger(input.quantity) || input.quantity <= 0)) {
+    throw new Error("quantity must be a positive integer");
+  }
+  if (!input.productName || typeof input.productName !== "string") {
+    throw new Error("productName is required");
+  }
 
   return {
     app_id: appId,

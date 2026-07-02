@@ -1,10 +1,29 @@
 import { auth } from "./internal/capabilities/auth";
 
-export type EazoPaymentCurrency = "usd";
+export const EAZO_PAYMENT_CURRENCY = {
+  USD: "usd",
+} as const;
 
-export type EazoPaymentMode = "one_time" | "subscription";
+export type EazoPaymentCurrency =
+  (typeof EAZO_PAYMENT_CURRENCY)[keyof typeof EAZO_PAYMENT_CURRENCY];
 
-export type EazoPaymentInterval = "day" | "week" | "month" | "year";
+export const EAZO_PAYMENT_MODE = {
+  ONE_TIME: "one_time",
+  SUBSCRIPTION: "subscription",
+} as const;
+
+export type EazoPaymentMode =
+  (typeof EAZO_PAYMENT_MODE)[keyof typeof EAZO_PAYMENT_MODE];
+
+export const EAZO_PAYMENT_INTERVAL = {
+  DAY: "day",
+  WEEK: "week",
+  MONTH: "month",
+  YEAR: "year",
+} as const;
+
+export type EazoPaymentInterval =
+  (typeof EAZO_PAYMENT_INTERVAL)[keyof typeof EAZO_PAYMENT_INTERVAL];
 
 export type EazoPaymentStatusValue =
   | "pending"
@@ -35,6 +54,16 @@ export type EazoPaymentProduct = {
   mode?: EazoPaymentMode;
   entitlementKey?: string;
   interval?: EazoPaymentInterval;
+};
+
+export type EazoPaymentProductInput = Omit<EazoPaymentProduct, "entitlementKey"> & {
+  entitlementKey?: string;
+};
+
+export type EazoPaymentProducts<T extends Record<string, EazoPaymentProductInput>> = {
+  readonly [K in keyof T]: Omit<T[K], "entitlementKey"> & {
+    readonly entitlementKey: string;
+  };
 };
 
 export type CreateEazoCheckoutInput = {
@@ -111,6 +140,64 @@ export type EazoPaymentApiErrorBody = {
   message?: unknown;
   detail?: unknown;
 };
+
+const PRODUCT_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,63}$/;
+
+export function assertEazoPaymentMode(value: unknown): asserts value is EazoPaymentMode {
+  if (!Object.values(EAZO_PAYMENT_MODE).includes(value as EazoPaymentMode)) {
+    throw new Error(`Invalid Eazo payment mode: ${String(value)}`);
+  }
+}
+
+export function assertEazoPaymentCurrency(value: unknown): asserts value is EazoPaymentCurrency {
+  if (!Object.values(EAZO_PAYMENT_CURRENCY).includes(value as EazoPaymentCurrency)) {
+    throw new Error(`Invalid Eazo payment currency: ${String(value)}`);
+  }
+}
+
+export function assertEazoPaymentProductKey(value: unknown, field = "product key"): asserts value is string {
+  if (typeof value !== "string" || !PRODUCT_KEY_PATTERN.test(value)) {
+    throw new Error(
+      `Invalid Eazo payment ${field}: use 2-64 chars, lowercase letters, numbers, "_" or "-", starting with a letter`,
+    );
+  }
+}
+
+function normalizeEazoPaymentProduct(key: string, product: EazoPaymentProductInput): EazoPaymentProduct {
+  if (product.key !== key) {
+    throw new Error(`Eazo payment product key mismatch: object key "${key}" must equal product.key "${product.key}"`);
+  }
+  assertEazoPaymentProductKey(product.key, "product key");
+  assertEazoPaymentProductKey(product.entitlementKey || product.key, "entitlement key");
+  assertEazoPaymentCurrency(product.currency);
+  assertEazoPaymentMode(product.mode || EAZO_PAYMENT_MODE.ONE_TIME);
+  if (!Number.isInteger(product.unitAmount) || product.unitAmount <= 0) {
+    throw new Error(`Invalid Eazo payment unitAmount for ${product.key}: use a positive integer in cents`);
+  }
+  if (typeof product.name !== "string" || product.name.trim().length === 0) {
+    throw new Error(`Invalid Eazo payment product name for ${product.key}`);
+  }
+  if (product.interval && !Object.values(EAZO_PAYMENT_INTERVAL).includes(product.interval)) {
+    throw new Error(`Invalid Eazo payment interval for ${product.key}: ${product.interval}`);
+  }
+
+  return {
+    ...product,
+    mode: product.mode || EAZO_PAYMENT_MODE.ONE_TIME,
+    entitlementKey: product.entitlementKey || product.key,
+  };
+}
+
+export function defineEazoPaymentProducts<const T extends Record<string, EazoPaymentProductInput>>(
+  products: T,
+): EazoPaymentProducts<T> {
+  return Object.fromEntries(
+    Object.entries(products).map(([key, product]) => [
+      key,
+      normalizeEazoPaymentProduct(key, product),
+    ]),
+  ) as EazoPaymentProducts<T>;
+}
 
 export class EazoPaymentApiError extends Error {
   status: number;

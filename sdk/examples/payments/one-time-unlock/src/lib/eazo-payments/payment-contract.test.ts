@@ -1,0 +1,287 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  buildEazoCheckoutRequest,
+  createEazoCheckoutSession,
+  getEazoEntitlementStatus,
+  getEazoPaymentStatus
+} from "@eazo/sdk/payments/server";
+import {
+  EAZO_PAYMENT_CURRENCY,
+  EAZO_PAYMENT_MODE,
+  defineEazoPaymentProducts
+} from "@eazo/sdk/payments";
+import {
+  createEazoCheckoutRoute,
+  createEazoEntitlementRoute,
+  createEazoPaymentStatusRoute
+} from "@eazo/sdk/payments/next";
+import {
+  assertCreateEazoCheckoutResultContract,
+  assertEazoCheckoutRequestContract,
+  assertEazoCheckoutResponseContract,
+  assertEazoEntitlementContract,
+  assertEazoPaymentStatusContract,
+  mockEazoCheckoutResponse,
+  mockEazoEntitlement,
+  mockEazoPaymentStatus
+} from "@eazo/sdk/payments/testing";
+import { getPaymentProduct, PAYMENT_PRODUCTS } from "./catalog";
+
+const TEST_PRODUCT = PAYMENT_PRODUCTS.premium;
+const TEST_PRODUCT_MODE = TEST_PRODUCT.mode || EAZO_PAYMENT_MODE.ONE_TIME;
+const TEST_ENTITLEMENT_KEY = TEST_PRODUCT.entitlementKey || TEST_PRODUCT.key;
+
+const originalEnv = { ...process.env };
+
+function mockPlatformResponse(status: number, body: unknown) {
+  global.fetch = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" }
+    })
+  ) as unknown as typeof fetch;
+}
+
+describe("Eazo Payments integration contract", () => {
+  beforeEach(() => {
+    process.env.EAZO_API_BASE = "https://creator.dev1.eazo.ai";
+    process.env.EAZO_APP_ID = "app_test";
+    process.env.EAZO_PRIVATE_KEY = "eazo_private_test";
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+  });
+
+  it("builds the platform checkout DTO from the product catalog", () => {
+    const request = buildEazoCheckoutRequest({
+      productKey: TEST_PRODUCT.key,
+      productName: TEST_PRODUCT.name,
+      unitAmount: TEST_PRODUCT.unitAmount,
+      currency: TEST_PRODUCT.currency,
+      mode: TEST_PRODUCT.mode,
+      entitlementKey: TEST_PRODUCT.entitlementKey,
+      appUserId: "app_user_test",
+      successUrl: "https://app.example.com/payment/success",
+      cancelUrl: "https://app.example.com/payment/cancel",
+      idempotencyKey: "checkout-once"
+    });
+
+    expect(request).toMatchObject({
+      app_id: "app_test",
+      app_user_id: "app_user_test",
+      product_key: TEST_PRODUCT.key,
+      entitlement_key: TEST_ENTITLEMENT_KEY,
+      mode: TEST_PRODUCT_MODE,
+      unit_amount: TEST_PRODUCT.unitAmount,
+      product_name: TEST_PRODUCT.name,
+      metadata: {
+        product_key: TEST_PRODUCT.key,
+        entitlement_key: TEST_ENTITLEMENT_KEY,
+        mode: TEST_PRODUCT_MODE,
+        app_user_id: "app_user_test"
+      }
+    });
+    assertEazoCheckoutRequestContract(request);
+  });
+
+  it("uses SDK payment constants and derives entitlement keys", () => {
+    expect(TEST_PRODUCT.mode).toBe(EAZO_PAYMENT_MODE.ONE_TIME);
+    expect(TEST_PRODUCT.currency).toBe(EAZO_PAYMENT_CURRENCY.USD);
+    expect(TEST_PRODUCT.entitlementKey).toBe(TEST_PRODUCT.key);
+  });
+
+  it("rejects invalid product keys and modes", () => {
+    expect(() =>
+      defineEazoPaymentProducts({
+        Premium: {
+          key: "Premium",
+          name: "Premium unlock",
+          unitAmount: 499,
+          currency: EAZO_PAYMENT_CURRENCY.USD,
+          mode: EAZO_PAYMENT_MODE.ONE_TIME
+        }
+      } as const)
+    ).toThrow("Invalid Eazo payment product key");
+
+    expect(() =>
+      defineEazoPaymentProducts({
+        premium: {
+          key: "premium",
+          name: "Premium unlock",
+          unitAmount: 499,
+          currency: EAZO_PAYMENT_CURRENCY.USD,
+          mode: "monthly" as never
+        }
+      } as const)
+    ).toThrow("Invalid Eazo payment mode");
+  });
+
+  it("creates checkout through Eazo platform and normalizes the result", async () => {
+    const platformResponse = mockEazoCheckoutResponse();
+    assertEazoCheckoutResponseContract(platformResponse);
+    mockPlatformResponse(200, platformResponse);
+
+    const result = await createEazoCheckoutSession({
+      productKey: TEST_PRODUCT.key,
+      productName: TEST_PRODUCT.name,
+      unitAmount: TEST_PRODUCT.unitAmount,
+      currency: TEST_PRODUCT.currency,
+      mode: TEST_PRODUCT.mode,
+      entitlementKey: TEST_PRODUCT.entitlementKey,
+      appUserId: "app_user_test",
+      successUrl: "https://app.example.com/payment/success",
+      cancelUrl: "https://app.example.com/payment/cancel",
+      idempotencyKey: "checkout-once"
+    });
+
+    assertCreateEazoCheckoutResultContract(result);
+    expect(result).toEqual({
+      checkoutSessionId: "cs_test_eazo",
+      checkoutUrl: expect.stringContaining("checkout.stripe.com"),
+      paymentId: "cap_test_eazo"
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://creator.dev1.eazo.ai/api/open/payments/checkout-sessions",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer eazo_private_test"
+        }
+      })
+    );
+    const [, request] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    assertEazoCheckoutRequestContract(body);
+    expect(body).toEqual({
+      app_id: "app_test",
+      app_user_id: "app_user_test",
+      product_key: TEST_PRODUCT.key,
+      entitlement_key: TEST_ENTITLEMENT_KEY,
+      mode: TEST_PRODUCT_MODE,
+      unit_amount: TEST_PRODUCT.unitAmount,
+      currency: TEST_PRODUCT.currency,
+      product_name: TEST_PRODUCT.name,
+      success_url: "https://app.example.com/payment/success",
+      cancel_url: "https://app.example.com/payment/cancel",
+      quantity: 1,
+      metadata: {
+        product_key: TEST_PRODUCT.key,
+        entitlement_key: TEST_ENTITLEMENT_KEY,
+        mode: TEST_PRODUCT_MODE,
+        app_user_id: "app_user_test"
+      },
+      idempotency_key: "checkout-once"
+    });
+  });
+
+  it("preserves platform checkout failure status and body", async () => {
+    mockPlatformResponse(422, { detail: [{ msg: "Field required" }] });
+
+    await expect(
+      createEazoCheckoutSession({
+        productKey: TEST_PRODUCT.key,
+        productName: TEST_PRODUCT.name,
+        unitAmount: TEST_PRODUCT.unitAmount,
+        currency: TEST_PRODUCT.currency,
+        mode: TEST_PRODUCT.mode,
+        entitlementKey: TEST_PRODUCT.entitlementKey,
+        appUserId: "app_user_test",
+        successUrl: "https://app.example.com/payment/success",
+        cancelUrl: "https://app.example.com/payment/cancel"
+      })
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "Field required"
+    });
+  });
+
+  it.each(["pending", "succeeded", "failed", "expired", "refunded", "disputed"] as const)(
+    "reads %s payment status from the Eazo ledger",
+    async (status) => {
+      const platformResponse = mockEazoPaymentStatus(status);
+      assertEazoPaymentStatusContract(platformResponse);
+      mockPlatformResponse(200, platformResponse);
+      const result = await getEazoPaymentStatus("cap_test_eazo");
+      assertEazoPaymentStatusContract(result);
+      expect(result.status).toBe(status);
+      expect(result.paid).toBe(status === "succeeded");
+      expect(fetch).toHaveBeenCalledWith(
+        "https://creator.dev1.eazo.ai/api/open/payments/cap_test_eazo/status?app_id=app_test",
+        {
+          headers: { Authorization: "Bearer eazo_private_test" },
+          cache: "no-store"
+        }
+      );
+    }
+  );
+
+  it.each(["inactive", "pending", "active", "failed", "expired", "refunded", "disputed"] as const)(
+    "reads %s entitlement status from the Eazo ledger",
+    async (status) => {
+      const platformResponse = mockEazoEntitlement(status, { product_key: TEST_PRODUCT.key });
+      assertEazoEntitlementContract(platformResponse);
+      mockPlatformResponse(200, platformResponse);
+      const result = await getEazoEntitlementStatus(TEST_PRODUCT.key, {
+        appUserId: "app_user_test"
+      });
+      assertEazoEntitlementContract(result);
+      expect(result.status).toBe(status);
+      expect(result.active).toBe(status === "active");
+      expect(fetch).toHaveBeenCalledWith(
+        `https://creator.dev1.eazo.ai/api/open/payments/entitlements?app_id=app_test&product_key=${TEST_PRODUCT.key}&app_user_id=app_user_test`,
+        {
+          headers: { Authorization: "Bearer eazo_private_test" },
+          cache: "no-store"
+        }
+      );
+    }
+  );
+
+  it("handles local checkout/status/entitlement route contracts", async () => {
+    mockPlatformResponse(200, mockEazoCheckoutResponse());
+    const POST = createEazoCheckoutRoute({
+      getProduct: getPaymentProduct,
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null }
+      })
+    });
+
+    const checkoutResponse = await POST(new Request("https://app.example.com/api/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ productKey: TEST_PRODUCT.key })
+    }));
+
+    expect(checkoutResponse.status).toBe(200);
+    assertCreateEazoCheckoutResultContract(await checkoutResponse.json());
+
+    mockPlatformResponse(200, mockEazoPaymentStatus("succeeded"));
+    const statusGET = createEazoPaymentStatusRoute({
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null }
+      })
+    });
+    const statusResponse = await statusGET(
+      new Request("https://app.example.com/api/payments/status?paymentId=cap_test_eazo")
+    );
+    expect(statusResponse.status).toBe(200);
+    assertEazoPaymentStatusContract(await statusResponse.json());
+
+    mockPlatformResponse(200, mockEazoEntitlement("active", { product_key: TEST_PRODUCT.key }));
+    const entitlementGET = createEazoEntitlementRoute({
+      getUser: () => ({
+        ok: true,
+        user: { id: "app_user_test", email: "test@example.com", name: "Test", avatarUrl: null }
+      })
+    });
+    const entitlementResponse = await entitlementGET(
+      new Request(`https://app.example.com/api/payments/entitlements?productKey=${TEST_PRODUCT.key}`)
+    );
+    expect(entitlementResponse.status).toBe(200);
+    assertEazoEntitlementContract(await entitlementResponse.json());
+  });
+});
