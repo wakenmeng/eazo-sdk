@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cart checkout for generated apps.** One checkout can now buy several items,
+  each in any quantity (virtual goods). New APIs: `createEazoCartCheckoutSession`,
+  `buildEazoCartCheckoutRequest`, `listEazoCartPayments`
+  (`@eazo/sdk/payments/server`); `createEazoCartCheckoutRoute`,
+  `createEazoCartPaymentStatusRoute`, `createEazoCartSyncRoute`
+  (`@eazo/sdk/payments/next`); `EazoCartPaymentSuccessPage`,
+  `EazoCartPaymentSync` (`@eazo/sdk/payments/next/client`);
+  `startEazoCartCheckout`, `assertEazoCartItems`, `getEazoCartMaximumAmount`
+  and `EAZO_CART_*` constants (`@eazo/sdk/payments`); cart mocks and contract
+  assertions (`@eazo/sdk/payments/testing`). Cart totals are capped at USD 5,000
+  (per-currency equivalents); one-time and subscription prices keep the USD 700
+  cap. Requires the Creator `mode=cart` checkout API.
+- `eazo-sdk payments init --recipe cart-checkout` scaffold and the
+  `examples/payments/cart-checkout` reference app.
+
+### Changed
+
+- `EazoPaymentStatus` gains optional `mode`, `app_user_id` and `line_items`.
+
 ## [0.22.10] - 2026-09-08
 
 ### Documentation

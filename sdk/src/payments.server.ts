@@ -1,21 +1,27 @@
 import {
+  assertEazoCartItems,
   assertEazoPaymentCurrency,
   assertEazoPaymentMode,
   assertEazoPaymentProductKey,
   assertEazoPaymentUnitAmount,
+  EAZO_CART_PAYMENT_MODE,
   EAZO_PAYMENT_MODE,
   EazoPaymentApiError,
   getEazoPaymentPriceLimits,
   normalizeEazoCheckoutResult,
   type EazoAppSubscription,
   type EazoAppSubscriptionsResponse,
+  type CreateEazoCartCheckoutInput,
   type CreateEazoCheckoutInput,
   type CreateEazoCheckoutResult,
+  type EazoCartCheckoutSessionRequest,
+  type EazoCartPaymentsResponse,
   type EazoCheckoutSessionRequest,
   type EazoCheckoutSessionResponse,
   type EazoEntitlement,
   type EazoPaymentApiErrorBody,
   type EazoPaymentStatus,
+  type EazoPaymentStatusValue,
 } from "./payments";
 
 export type EazoPaymentEnv = {
@@ -142,9 +148,42 @@ export function buildEazoCheckoutRequest(
 export async function createEazoCheckoutSession(
   input: CreateEazoCheckoutInput,
 ): Promise<CreateEazoCheckoutResult> {
-  const { apiBase, privateKey } = requireEazoPaymentEnv();
-  const requestBody = buildEazoCheckoutRequest(input);
+  return postCheckoutSession(buildEazoCheckoutRequest(input));
+}
 
+export function buildEazoCartCheckoutRequest(
+  input: CreateEazoCartCheckoutInput,
+): EazoCartCheckoutSessionRequest {
+  const { appId } = requireEazoPaymentEnv();
+  if (!input.appUserId || typeof input.appUserId !== "string") {
+    throw new Error("appUserId is required for cart checkout");
+  }
+  assertEazoCartItems(input.items, input.currency);
+
+  return {
+    app_id: appId,
+    app_user_id: input.appUserId,
+    mode: EAZO_CART_PAYMENT_MODE,
+    currency: input.currency,
+    items: input.items.map((item) => ({
+      name: item.name.trim(),
+      unit_amount: item.unitAmount,
+      quantity: item.quantity ?? 1,
+      metadata: item.metadata || {},
+    })),
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    metadata: input.metadata || {},
+    idempotency_key:
+      input.idempotencyKey ||
+      createStableCheckoutIdempotencyKey(appId, EAZO_CART_PAYMENT_MODE, input.appUserId),
+  };
+}
+
+async function postCheckoutSession(
+  requestBody: EazoCheckoutSessionRequest | EazoCartCheckoutSessionRequest,
+): Promise<CreateEazoCheckoutResult> {
+  const { apiBase, privateKey } = requireEazoPaymentEnv();
   const response = await fetch(`${apiBase}/api/open/payments/checkout-sessions`, {
     method: "POST",
     headers: {
@@ -165,6 +204,47 @@ export async function createEazoCheckoutSession(
   }
 
   return checkout;
+}
+
+export async function createEazoCartCheckoutSession(
+  input: CreateEazoCartCheckoutInput,
+): Promise<CreateEazoCheckoutResult> {
+  return postCheckoutSession(buildEazoCartCheckoutRequest(input));
+}
+
+export async function listEazoCartPayments(options: {
+  appUserId?: string;
+  status?: EazoPaymentStatusValue;
+  updatedAfter?: Date | string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<EazoCartPaymentsResponse> {
+  const { apiBase, appId, privateKey } = requireEazoPaymentEnv();
+  const query = new URLSearchParams({
+    app_id: appId,
+    mode: EAZO_CART_PAYMENT_MODE,
+    limit: String(options.limit ?? 50),
+    offset: String(options.offset ?? 0),
+  });
+  if (options.appUserId) query.set("app_user_id", options.appUserId);
+  if (options.status) query.set("status", options.status);
+  if (options.updatedAfter) {
+    const updatedAfter = options.updatedAfter instanceof Date
+      ? options.updatedAfter.toISOString()
+      : options.updatedAfter;
+    query.set("updated_after", updatedAfter);
+  }
+
+  const response = await fetch(`${apiBase}/api/open/payments?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${privateKey}` },
+    cache: "no-store",
+  });
+
+  const data = (await readJson(response)) as EazoCartPaymentsResponse & EazoPaymentApiErrorBody;
+  if (!response.ok) {
+    throw new EazoPaymentApiError(response.status, data, "Cart payment list failed");
+  }
+  return data;
 }
 
 export async function getEazoPaymentStatus(
@@ -282,7 +362,13 @@ export function resumeEazoSubscription(
 }
 
 export type {
+  CreateEazoCartCheckoutInput,
   CreateEazoCheckoutInput,
+  EazoCartCheckoutSessionRequest,
+  EazoCartItem,
+  EazoCartLineItem,
+  EazoCartPayment,
+  EazoCartPaymentsResponse,
   CreateEazoCheckoutResult,
   EazoCheckoutSessionRequest,
   EazoCheckoutSessionResponse,

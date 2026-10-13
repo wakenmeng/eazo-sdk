@@ -1,16 +1,26 @@
 import {
+  EAZO_CART_MAX_LINE_ITEMS,
+  EAZO_CART_MAX_QUANTITY,
+  EAZO_CART_PAYMENT_MODE,
   EazoPaymentApiError,
+  type EazoCartItem,
+  type EazoCartLine,
+  type EazoCartPayment,
+  type EazoPaymentCurrency,
+  type EazoPaymentMetadata,
   type EazoPaymentProduct,
 } from "./payments";
 import {
   cancelEazoSubscription,
+  createEazoCartCheckoutSession,
   createEazoCheckoutSession,
   getEazoEntitlementStatus,
   getEazoPaymentStatus,
+  listEazoCartPayments,
   listEazoSubscriptions,
   resumeEazoSubscription,
 } from "./payments.server";
-import { requireAuth } from "./server";
+import { requireAuth, type User } from "./server";
 
 type JsonBody = Record<string, unknown>;
 
@@ -329,5 +339,194 @@ export function createEazoResumeSubscriptionRoute(options: {
     const subscriptionId = params.subscriptionId || params.id || "";
     if (!subscriptionId) return jsonResponse({ error: "Missing subscriptionId" }, { status: 400 });
     return subscriptionActionResponse(request, subscriptionId, "resume", options.getUser);
+  };
+}
+
+const CART_LINE_ID_MAX_LENGTH = 128;
+const CART_SYNC_PAGE_SIZE = 100;
+const CART_SYNC_MAX_PAGES = 10;
+
+export type EazoCartResolution = {
+  currency: EazoPaymentCurrency;
+  items: EazoCartItem[];
+  metadata?: EazoPaymentMetadata;
+};
+
+export type EazoCartFulfill = (
+  payment: EazoCartPayment,
+  context: { user: User },
+) => void | Promise<void>;
+
+export type EazoCartCheckoutRouteOptions = {
+  /**
+   * Turn the browser's `{ id, quantity }` lines into priced items using the app's
+   * own server-side data. Return null to reject the cart (unknown or unavailable
+   * item). Never trust prices sent from the browser.
+   */
+  resolveCart: (input: {
+    lines: EazoCartLine[];
+    user: User;
+    request: Request;
+  }) => EazoCartResolution | null | undefined | Promise<EazoCartResolution | null | undefined>;
+  getUser?: (request: Request) => ReturnType<typeof requireAuth>;
+  successPath?: string;
+  cancelPath?: string;
+};
+
+export type EazoCartFulfillRouteOptions = {
+  /**
+   * Grant what a paid cart bought. Called only for paid cart payments, and may be
+   * called more than once for the same payment, so it must be idempotent by
+   * `payment.payment_id` (for example a unique key in the app's own table).
+   */
+  fulfill: EazoCartFulfill;
+  getUser?: (request: Request) => ReturnType<typeof requireAuth>;
+};
+
+function platformErrorResponse(error: unknown, fallbackMessage: string) {
+  if (error instanceof EazoPaymentApiError) {
+    return jsonResponse(
+      { error: error.message, platform: error.body },
+      { status: error.status },
+    );
+  }
+  return jsonResponse(
+    { error: error instanceof Error ? error.message : fallbackMessage },
+    { status: 500 },
+  );
+}
+
+function parseCartLines(body: JsonBody): EazoCartLine[] | null {
+  const lines = body.lines;
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > EAZO_CART_MAX_LINE_ITEMS) {
+    return null;
+  }
+  const parsed: EazoCartLine[] = [];
+  for (const line of lines) {
+    if (!line || typeof line !== "object") return null;
+    const { id, quantity } = line as Record<string, unknown>;
+    if (typeof id !== "string" || id.length === 0 || id.length > CART_LINE_ID_MAX_LENGTH) return null;
+    if (!Number.isInteger(quantity) || (quantity as number) < 1 || (quantity as number) > EAZO_CART_MAX_QUANTITY) {
+      return null;
+    }
+    parsed.push({ id, quantity: quantity as number });
+  }
+  return parsed;
+}
+
+export function createEazoCartCheckoutRoute(options: EazoCartCheckoutRouteOptions) {
+  const successPath = options.successPath || "/payment/cart/success";
+  const cancelPath = options.cancelPath || "/payment/cart/cancel";
+
+  return async function POST(request: Request) {
+    const body = await request.json().catch(() => ({}));
+    const lines = parseCartLines(body && typeof body === "object" ? body as JsonBody : {});
+    if (!lines) {
+      return jsonResponse(
+        { error: `Invalid cart: send lines as [{ id, quantity }] with 1-${EAZO_CART_MAX_LINE_ITEMS} entries` },
+        { status: 400 },
+      );
+    }
+
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const cart = await options.resolveCart({ lines, user: authResult.user, request });
+      if (!cart) {
+        return jsonResponse({ error: "Invalid cart" }, { status: 400 });
+      }
+      const origin = getRequestOrigin(request);
+      const checkout = await createEazoCartCheckoutSession({
+        appUserId: authResult.user.id,
+        currency: cart.currency,
+        items: cart.items,
+        metadata: cart.metadata,
+        successUrl: `${origin}${successPath}`,
+        cancelUrl: `${origin}${cancelPath}`,
+      });
+      return jsonResponse(checkout);
+    } catch (error) {
+      return platformErrorResponse(error, "Checkout failed");
+    }
+  };
+}
+
+function isCartPayment(payment: { mode?: string | null }): payment is EazoCartPayment {
+  return payment.mode === EAZO_CART_PAYMENT_MODE;
+}
+
+export function createEazoCartPaymentStatusRoute(options: EazoCartFulfillRouteOptions) {
+  return async function GET(request: Request) {
+    const paymentId = firstSearchParam(
+      new URL(request.url).searchParams,
+      ["paymentId", "payment_id"],
+    );
+    if (!paymentId) {
+      return jsonResponse(
+        { error: "Missing paymentId", accepted: ["paymentId", "payment_id"] },
+        { status: 400 },
+      );
+    }
+
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
+    let status;
+    try {
+      status = await getEazoPaymentStatus(paymentId, { appUserId: authResult.user.id });
+    } catch (error) {
+      return platformErrorResponse(error, "Payment status failed");
+    }
+    if (!isCartPayment(status)) {
+      return jsonResponse({ error: "Not a cart payment" }, { status: 400 });
+    }
+    if (!status.paid) {
+      return jsonResponse({ ...status, fulfilled: false } as unknown as JsonBody);
+    }
+
+    try {
+      await options.fulfill(status, { user: authResult.user });
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: error instanceof Error ? error.message : "Fulfillment failed",
+          payment_id: status.payment_id,
+          paid: true,
+          fulfilled: false,
+        },
+        { status: 500 },
+      );
+    }
+    return jsonResponse({ ...status, fulfilled: true } as unknown as JsonBody);
+  };
+}
+
+export function createEazoCartSyncRoute(options: EazoCartFulfillRouteOptions) {
+  return async function POST(request: Request) {
+    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
+    if (!authResult.ok) return authResult.response;
+
+    let fulfilled = 0;
+    try {
+      for (let page = 0; page < CART_SYNC_MAX_PAGES; page += 1) {
+        const result = await listEazoCartPayments({
+          appUserId: authResult.user.id,
+          status: "succeeded",
+          limit: CART_SYNC_PAGE_SIZE,
+          offset: page * CART_SYNC_PAGE_SIZE,
+        });
+        for (const payment of result.items) {
+          await options.fulfill(payment, { user: authResult.user });
+          fulfilled += 1;
+        }
+        if (!result.has_more) break;
+      }
+    } catch (error) {
+      const response = platformErrorResponse(error, "Cart sync failed");
+      const body = await response.json();
+      return jsonResponse({ ...body, fulfilled }, { status: response.status });
+    }
+    return jsonResponse({ fulfilled });
   };
 }

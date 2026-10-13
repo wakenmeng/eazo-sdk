@@ -297,6 +297,153 @@ export const EAZO_PAYMENT_MAXIMUM_UNIT_AMOUNT_BY_CURRENCY = {
   zmw: 1_264_300,
 } as const satisfies Record<EazoPaymentCurrency, number>;
 
+// Cart checkout totals use a separate USD 5,000 ceiling. Each entry scales the
+// whole-major-unit USD 700 entry above by 5000/700 and rounds up, so it shares
+// the same FX snapshot and Stripe technical caps. Mirrors Creator's
+// CART_MAXIMUM_AMOUNT_BY_CURRENCY.
+export const EAZO_CART_MAXIMUM_USD = 5_000;
+export const EAZO_CART_MAX_LINE_ITEMS = 100;
+export const EAZO_CART_MAX_QUANTITY = 999;
+export const EAZO_CART_PAYMENT_MODE = "cart";
+export const EAZO_CART_MAXIMUM_AMOUNT_BY_CURRENCY = {
+  aed: 1_836_500,
+  afn: 32_820_000,
+  all: 41_069_300,
+  amd: 99_999_999,
+  ang: 895_000,
+  aoa: 99_999_999,
+  ars: 99_999_999,
+  aud: 722_200,
+  awg: 895_000,
+  azn: 850_800,
+  bam: 858_600,
+  bbd: 1_000_000,
+  bdt: 61_680_800,
+  bgn: 858_600,
+  bhd: 188_600,
+  bif: 14_962_136,
+  bmd: 500_000,
+  bnd: 647_200,
+  bob: 5_042_900,
+  brl: 2_559_300,
+  bsd: 500_000,
+  bwp: 6_916_500,
+  byn: 1_427_200,
+  bzd: 1_000_000,
+  cad: 707_900,
+  cdf: 99_999_999,
+  chf: 407_200,
+  clp: 4_627_208,
+  cny: 3_394_300,
+  cop: 1_621_906_500,
+  crc: 99_999_999,
+  cve: 48_373_600,
+  czk: 10_648_600,
+  djf: 888_608,
+  dkk: 3_272_900,
+  dop: 29_445_800,
+  dzd: 66_629_300,
+  egp: 25_115_000,
+  etb: 79_691_500,
+  eur: 439_300,
+  fjd: 1_118_600,
+  fkp: 374_300,
+  gbp: 374_300,
+  gel: 1_317_200,
+  gip: 374_300,
+  gmd: 37_142_900,
+  gnf: 43_903_972,
+  gtq: 3_820_800,
+  gyd: 99_999_999,
+  hkd: 3_919_300,
+  hnl: 13_403_600,
+  htg: 65_407_900,
+  huf: 156_940_000,
+  idr: 9_059_696_500,
+  ils: 1_513_600,
+  inr: 47_860_800,
+  isk: 62_737_200,
+  jmd: 79_354_300,
+  jod: 355_000,
+  jpy: 811_550,
+  kes: 64_641_500,
+  kgs: 43_731_500,
+  khr: 99_999_999,
+  kmf: 2_158_250,
+  krw: 7_485_000,
+  kwd: 155_000,
+  kyd: 417_200,
+  kzt: 99_999_999,
+  lak: 99_999_999,
+  lbp: 44_750_000_000,
+  lkr: 99_999_999,
+  lrd: 90_947_900,
+  lsl: 8_215_000,
+  mad: 4_662_200,
+  mdl: 8_785_800,
+  mga: 21_365_008,
+  mkd: 26_963_600,
+  mmk: 99_999_999,
+  mnt: 99_999_999,
+  mop: 4_037_200,
+  mur: 23_607_900,
+  mvr: 7_725_000,
+  mwk: 99_999_999,
+  mxn: 8_755_800,
+  myr: 2_036_500,
+  mzn: 31_770_000,
+  nad: 8_215_000,
+  ngn: 99_999_999,
+  nio: 18_415_000,
+  nok: 4_890_000,
+  npr: 76_577_200,
+  nzd: 867_900,
+  pab: 500_000,
+  pen: 1_704_300,
+  pgk: 2_215_800,
+  php: 30_826_500,
+  pkr: 99_999_999,
+  pln: 1_900_000,
+  pyg: 30_387_929,
+  qar: 1_820_000,
+  ron: 2_292_200,
+  rsd: 51_378_600,
+  rwf: 7_356_486,
+  sar: 1_875_000,
+  sbd: 3_989_300,
+  scr: 7_150_000,
+  sek: 4_851_500,
+  sgd: 647_200,
+  shp: 374_300,
+  sle: 12_164_300,
+  sos: 99_999_999,
+  srd: 18_855_000,
+  stn: 10_748_600,
+  szl: 8_215_000,
+  thb: 16_718_600,
+  tjs: 4_620_800,
+  top: 1_191_500,
+  try: 23_503_600,
+  ttd: 3_394_300,
+  twd: 16_090_000,
+  tzs: 99_999_999,
+  uah: 22_332_200,
+  ugx: 99_999_999,
+  usd: 500_000,
+  uyu: 20_182_200,
+  uzs: 99_999_999,
+  vnd: 99_999_999,
+  vuv: 598_722,
+  wst: 1_362_200,
+  xaf: 2_877_672,
+  xcd: 1_350_800,
+  xof: 2_877_672,
+  xpf: 523_508,
+  yer: 99_999_999,
+  zar: 8_211_500,
+  zmw: 9_030_800,
+} as const satisfies Record<EazoPaymentCurrency, number>;
+
 // Most floors come from Stripe's settlement-currency table; CNY uses Eazo's ¥5
 // product policy. Cross-currency charges can still require a higher effective floor.
 // https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts
@@ -470,6 +617,73 @@ export type EazoPaymentStatus = {
   product_name: string;
   metadata: EazoPaymentMetadata;
   entitlement?: EazoEntitlement | null;
+  mode?: EazoPaymentMode | typeof EAZO_CART_PAYMENT_MODE;
+  app_user_id?: string | null;
+  line_items?: EazoCartLineItem[] | null;
+};
+
+export type EazoCartItem = {
+  /** Shown on the Stripe checkout page and stored in the payment snapshot. */
+  name: string;
+  unitAmount: number;
+  quantity?: number;
+  /** Opaque app data returned with the paid payment, e.g. the app's own item id. */
+  metadata?: EazoPaymentMetadata;
+};
+
+export type EazoCartLineItem = {
+  name: string;
+  unit_amount: number;
+  quantity: number;
+  amount_subtotal: number;
+  metadata: EazoPaymentMetadata;
+};
+
+export type CreateEazoCartCheckoutInput = {
+  appUserId: string;
+  currency: EazoPaymentCurrency;
+  items: EazoCartItem[];
+  successUrl: string;
+  cancelUrl: string;
+  metadata?: EazoPaymentMetadata;
+  idempotencyKey?: string;
+};
+
+export type EazoCartCheckoutSessionRequest = {
+  app_id: string;
+  app_user_id: string;
+  mode: typeof EAZO_CART_PAYMENT_MODE;
+  currency: EazoPaymentCurrency;
+  items: Array<{
+    name: string;
+    unit_amount: number;
+    quantity: number;
+    metadata: EazoPaymentMetadata;
+  }>;
+  success_url: string;
+  cancel_url: string;
+  metadata: EazoPaymentMetadata;
+  idempotency_key: string;
+};
+
+/** A cart payment as returned by status and list APIs. Grant goods only when `paid` is true. */
+export type EazoCartPayment = EazoPaymentStatus & {
+  mode: typeof EAZO_CART_PAYMENT_MODE;
+  app_user_id: string;
+  line_items: EazoCartLineItem[];
+};
+
+export type EazoCartPaymentsResponse = {
+  items: EazoCartPayment[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+};
+
+/** What the browser sends to the app's cart checkout route: the app's own item ids. */
+export type EazoCartLine = {
+  id: string;
+  quantity: number;
 };
 
 export type EazoAppSubscriptionStatus =
@@ -570,6 +784,56 @@ export function assertEazoPaymentUnitAmount(
       `${field} for ${currency.toUpperCase()} must be a multiple of ${limits.unitAmountMultiple} in minor currency units`,
     );
   }
+}
+
+export function getEazoCartMaximumAmount(currency: EazoPaymentCurrency): number {
+  assertEazoPaymentCurrency(currency);
+  return EAZO_CART_MAXIMUM_AMOUNT_BY_CURRENCY[currency];
+}
+
+/**
+ * Validates cart lines and returns the total in minor units. Line prices keep the
+ * per-currency minimum and multiple rules but only the cart total is capped.
+ */
+export function assertEazoCartItems(items: unknown, currency: EazoPaymentCurrency): number {
+  assertEazoPaymentCurrency(currency);
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("cart items must be a non-empty array");
+  }
+  if (items.length > EAZO_CART_MAX_LINE_ITEMS) {
+    throw new Error(`cart allows at most ${EAZO_CART_MAX_LINE_ITEMS} items`);
+  }
+  const limits = getEazoPaymentPriceLimits(currency);
+  let total = 0;
+  items.forEach((item: Partial<EazoCartItem>, index) => {
+    const field = `items[${index}]`;
+    if (typeof item?.name !== "string" || item.name.trim().length === 0) {
+      throw new Error(`${field}.name is required`);
+    }
+    const unitAmount = item.unitAmount;
+    if (!Number.isInteger(unitAmount) || (unitAmount as number) < limits.minimumUnitAmount) {
+      throw new Error(
+        `${field}.unitAmount for ${currency.toUpperCase()} must be an integer of at least ${limits.minimumUnitAmount} in minor currency units`,
+      );
+    }
+    if ((unitAmount as number) % limits.unitAmountMultiple !== 0) {
+      throw new Error(
+        `${field}.unitAmount for ${currency.toUpperCase()} must be a multiple of ${limits.unitAmountMultiple} in minor currency units`,
+      );
+    }
+    const quantity = item.quantity ?? 1;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > EAZO_CART_MAX_QUANTITY) {
+      throw new Error(`${field}.quantity must be an integer from 1 to ${EAZO_CART_MAX_QUANTITY}`);
+    }
+    total += (unitAmount as number) * quantity;
+  });
+  const maximum = getEazoCartMaximumAmount(currency);
+  if (total > maximum) {
+    throw new Error(
+      `cart total for ${currency.toUpperCase()} must not exceed ${maximum} in minor currency units`,
+    );
+  }
+  return total;
 }
 
 export function assertEazoPaymentProductKey(value: unknown, field = "product key"): asserts value is string {
@@ -788,6 +1052,41 @@ export async function startEazoCheckout(
       ...(sessionHeader ? { "x-eazo-session": sessionHeader } : {}),
     },
     body: JSON.stringify({ productKey }),
+  });
+  const data = await response.json().catch(() => ({}));
+  const checkout = normalizeEazoCheckoutResult(data as EazoCheckoutSessionResponseLike);
+
+  if (!response.ok || !checkout) {
+    throw new Error(checkoutErrorMessage(data));
+  }
+
+  rememberEazoPaymentId(checkout.paymentId);
+  redirect(checkout.checkoutUrl);
+}
+
+/**
+ * Sends the app's own item ids and quantities to the app's cart checkout route,
+ * then navigates the current window to Eazo checkout. Prices are resolved on the
+ * server by the route's resolveCart callback, never taken from the browser.
+ */
+export async function startEazoCartCheckout(
+  lines: EazoCartLine[],
+  options: { endpoint?: string; redirect?: EazoCheckoutRedirect } = {},
+) {
+  const endpoint = options.endpoint || "/api/payments/cart-checkout";
+  const redirect = options.redirect || ((checkoutUrl: string) => {
+    window.location.assign(checkoutUrl);
+  });
+  await auth.login();
+  const sessionHeader = await auth.getSessionHeader();
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionHeader ? { "x-eazo-session": sessionHeader } : {}),
+    },
+    body: JSON.stringify({ lines }),
   });
   const data = await response.json().catch(() => ({}));
   const checkout = normalizeEazoCheckoutResult(data as EazoCheckoutSessionResponseLike);

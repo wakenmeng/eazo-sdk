@@ -227,6 +227,33 @@ src/lib/eazo-payments/payment-contract.test.ts
 src/lib/eazo-payments/payment-ui-contract.test.tsx
 ```
 
+#### Cart checkout (multiple items, any quantity)
+
+For a shop where one checkout buys several items, each in any quantity, use the
+`cart-checkout` recipe (requires `@eazo/sdk` >= 0.23.0). Eazo collects the money
+and reports whether the payment is paid; the app owns its items, prices, and
+what it grants.
+
+```bash
+./node_modules/.bin/eazo-sdk payments init --recipe cart-checkout
+```
+
+The app writes two functions in `src/lib/eazo-payments/cart.ts`:
+
+- `resolveCart({ lines })` prices the browser's `{ id, quantity }` lines from the
+  app's own server-side data and returns `{ currency, items }`, or `null` to
+  reject the cart. Up to 100 lines, quantity 1–999, and a cart total of at most
+  USD 5,000 (`getEazoCartMaximumAmount(currency)`).
+- `fulfillCartPayment(payment, { user })` grants `payment.line_items` to the
+  user. It runs only for paid cart payments and must be idempotent by
+  `payment.payment_id`.
+
+The browser starts checkout with `startEazoCartCheckout(lines)` (or the
+scaffolded `CartCheckoutButton`). Delivery runs on the server from the success
+page and from `CartPaymentSync` mounted in the root layout, which also delivers
+carts the buyer never returned from. See
+`examples/payments/cart-checkout`.
+
 UI code should place the scaffolded component so checkout, login, status
 polling, and entitlement state stay on the SDK-owned lifecycle:
 

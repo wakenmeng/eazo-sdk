@@ -16,7 +16,7 @@ type TemplateFile = {
 };
 
 const DEFAULT_RECIPE = "one-time-unlock";
-const SUPPORTED_RECIPES = new Set(["one-time-unlock", "monthly-subscription"]);
+const SUPPORTED_RECIPES = new Set(["one-time-unlock", "monthly-subscription", "cart-checkout"]);
 export const EAZO_PAYMENTS_MIN_SDK_VERSION = "0.22.3";
 export const EAZO_PAYMENTS_REQUIRED_EXPORTS = [
   "./payments",
@@ -980,7 +980,270 @@ describe("Eazo payment UI contract", () => {
 `);
 }
 
+function cartTemplate() {
+  return normalizeNewline(`
+import {
+  EAZO_PAYMENT_CURRENCY,
+  type EazoCartItem,
+  type EazoCartLine,
+} from "@eazo/sdk/payments";
+import type { EazoCartFulfill, EazoCartResolution } from "@eazo/sdk/payments/next";
+
+// Every cart is charged in one currency.
+export const SHOP_CURRENCY = EAZO_PAYMENT_CURRENCY.USD;
+
+// The app's sellable items, keyed by the id the browser sends in cart lines.
+// Replace with the app's own data source. unitAmount is integer minor units
+// (cents for USD); one cart total may not exceed USD 5,000.
+export const SHOP_ITEMS: Record<string, { name: string; unitAmount: number }> = {
+  gem_100: { name: "100 Gems", unitAmount: 199 },
+  skin_red: { name: "Red Skin", unitAmount: 499 },
+};
+
+// Server-side pricing: never trust prices from the browser. Return null to
+// reject a cart that references an unknown or unavailable item.
+export async function resolveCart({ lines }: { lines: EazoCartLine[] }): Promise<EazoCartResolution | null> {
+  const items: EazoCartItem[] = [];
+  for (const line of lines) {
+    const item = SHOP_ITEMS[line.id];
+    if (!item) return null;
+    items.push({
+      name: item.name,
+      unitAmount: item.unitAmount,
+      quantity: line.quantity,
+      metadata: { item_id: line.id },
+    });
+  }
+  return { currency: SHOP_CURRENCY, items };
+}
+
+// Grant what a paid cart bought to user.id, using payment.line_items
+// (line.metadata.item_id and line.quantity). Eazo calls this only for paid cart
+// payments, but may call it more than once for the same payment: store
+// payment.payment_id with a unique constraint and skip payments already granted.
+export const fulfillCartPayment: EazoCartFulfill = async (payment, { user }) => {
+  void payment;
+  void user;
+  throw new Error("Implement fulfillCartPayment in src/lib/eazo-payments/cart.ts");
+};
+`);
+}
+
+function cartCheckoutRouteTemplate() {
+  return normalizeNewline(`
+import { createEazoCartCheckoutRoute } from "@eazo/sdk/payments/next";
+import { resolveCart } from "@/lib/eazo-payments/cart";
+
+export const POST = createEazoCartCheckoutRoute({ resolveCart });
+`);
+}
+
+function cartStatusRouteTemplate() {
+  return normalizeNewline(`
+import { createEazoCartPaymentStatusRoute } from "@eazo/sdk/payments/next";
+import { fulfillCartPayment } from "@/lib/eazo-payments/cart";
+
+export const GET = createEazoCartPaymentStatusRoute({ fulfill: fulfillCartPayment });
+`);
+}
+
+function cartSyncRouteTemplate() {
+  return normalizeNewline(`
+import { createEazoCartSyncRoute } from "@eazo/sdk/payments/next";
+import { fulfillCartPayment } from "@/lib/eazo-payments/cart";
+
+export const POST = createEazoCartSyncRoute({ fulfill: fulfillCartPayment });
+`);
+}
+
+function cartSuccessPageTemplate() {
+  return normalizeNewline(`
+"use client";
+
+import { EazoCartPaymentSuccessPage } from "@eazo/sdk/payments/next/client";
+
+export default function CartPaymentSuccessPage() {
+  return <EazoCartPaymentSuccessPage />;
+}
+`);
+}
+
+function cartCheckoutButtonTemplate() {
+  return normalizeNewline(`
+"use client";
+
+import * as React from "react";
+import { startEazoCartCheckout, type EazoCartLine } from "@eazo/sdk/payments";
+
+export type CartCheckoutButtonProps = {
+  lines: EazoCartLine[];
+  children?: React.ReactNode;
+  className?: string;
+};
+
+// Cart contents (lines) can live in React state or localStorage; payment state
+// never does. The button only starts checkout; delivery happens on the server.
+export function CartCheckoutButton({ lines, children = "Checkout", className }: CartCheckoutButtonProps) {
+  const [starting, setStarting] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  async function checkout() {
+    setStarting(true);
+    setError("");
+    try {
+      await startEazoCartCheckout(lines);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+      setStarting(false);
+    }
+  }
+
+  return (
+    <div>
+      <button type="button" className={className} disabled={starting || lines.length === 0} onClick={checkout}>
+        {children}
+      </button>
+      {error ? <p role="alert">{error}</p> : null}
+    </div>
+  );
+}
+`);
+}
+
+function cartPaymentSyncTemplate() {
+  return normalizeNewline(`
+"use client";
+
+import { EazoCartPaymentSync } from "@eazo/sdk/payments/next/client";
+
+// Mount once in the root layout so paid carts are delivered even when the buyer
+// closed the page before returning from checkout.
+export function CartPaymentSync() {
+  return <EazoCartPaymentSync />;
+}
+`);
+}
+
+function cartContractTestTemplate() {
+  return normalizeNewline(`
+import * as fs from "fs";
+import * as path from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildEazoCartCheckoutRequest } from "@eazo/sdk/payments/server";
+import { createEazoCartPaymentStatusRoute } from "@eazo/sdk/payments/next";
+import {
+  assertEazoCartCheckoutRequestContract,
+  assertNoLegacyPaymentFlowSource,
+  mockEazoCartPayment,
+} from "@eazo/sdk/payments/testing";
+import { fulfillCartPayment, resolveCart, SHOP_ITEMS } from "./cart";
+
+const TEST_USER = { id: "app_user_test", email: null, name: null, avatarUrl: null };
+const originalEnv = { ...process.env };
+
+function mockPlatformResponse(status: number, body: unknown) {
+  global.fetch = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    }),
+  ) as unknown as typeof fetch;
+}
+
+function listSourceFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return listSourceFiles(fullPath);
+    if (/\\.test\\.(ts|tsx|js|jsx)$/.test(entry.name)) return [];
+    if (/\\.(ts|tsx|js|jsx)$/.test(entry.name)) return [fullPath];
+    return [];
+  });
+}
+
+describe("Eazo cart checkout contract", () => {
+  beforeEach(() => {
+    process.env.EAZO_API_BASE = "https://dev1.eazo.ai";
+    process.env.EAZO_APP_ID = "app_test";
+    process.env.EAZO_PRIVATE_KEY = "eazo_private_test";
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+  });
+
+  it("prices every shop item on the server into a valid platform request", async () => {
+    const lines = Object.keys(SHOP_ITEMS).map((id) => ({ id, quantity: 2 }));
+    const cart = await resolveCart({ lines });
+    expect(cart).not.toBeNull();
+
+    const request = buildEazoCartCheckoutRequest({
+      appUserId: TEST_USER.id,
+      currency: cart!.currency,
+      items: cart!.items,
+      metadata: cart!.metadata,
+      successUrl: "https://app.example.com/payment/cart/success",
+      cancelUrl: "https://app.example.com/payment/cart/cancel",
+    });
+    assertEazoCartCheckoutRequestContract(request);
+  });
+
+  it("rejects carts with unknown items", async () => {
+    await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }] })).resolves.toBeNull();
+  });
+
+  it("fulfills a paid cart and tolerates repeated delivery of the same payment", async () => {
+    const payment = mockEazoCartPayment("succeeded");
+    await fulfillCartPayment(payment, { user: TEST_USER });
+    await fulfillCartPayment(payment, { user: TEST_USER });
+  });
+
+  it("only fulfills cart payments that are paid", async () => {
+    const fulfill = vi.fn();
+    const GET = createEazoCartPaymentStatusRoute({
+      fulfill,
+      getUser: () => ({ ok: true, user: TEST_USER }),
+    });
+
+    mockPlatformResponse(200, mockEazoCartPayment("pending"));
+    const pending = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_test_cart"));
+    expect((await pending.json()).fulfilled).toBe(false);
+    expect(fulfill).not.toHaveBeenCalled();
+
+    mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
+    const paid = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_test_cart"));
+    expect((await paid.json()).fulfilled).toBe(true);
+    expect(fulfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not contain legacy hand-written checkout flow code", () => {
+    const srcDir = path.resolve(process.cwd(), "src");
+    for (const filePath of listSourceFiles(srcDir)) {
+      const source = fs.readFileSync(filePath, "utf8");
+      assertNoLegacyPaymentFlowSource(source, path.relative(process.cwd(), filePath));
+    }
+  });
+});
+`);
+}
+
+function cartTemplateFiles(): TemplateFile[] {
+  return [
+    { filePath: "src/lib/eazo-payments/cart.ts", content: cartTemplate() },
+    { filePath: "src/lib/eazo-payments/cart-contract.test.ts", content: cartContractTestTemplate() },
+    { filePath: "src/components/eazo-payments/CartCheckoutButton.tsx", content: cartCheckoutButtonTemplate() },
+    { filePath: "src/components/eazo-payments/CartPaymentSync.tsx", content: cartPaymentSyncTemplate() },
+    { filePath: "src/app/api/payments/cart-checkout/route.ts", content: cartCheckoutRouteTemplate() },
+    { filePath: "src/app/api/payments/cart-status/route.ts", content: cartStatusRouteTemplate() },
+    { filePath: "src/app/api/payments/cart-sync/route.ts", content: cartSyncRouteTemplate() },
+    { filePath: "src/app/payment/cart/success/page.tsx", content: cartSuccessPageTemplate() },
+    { filePath: "src/app/payment/cart/cancel/page.tsx", content: cancelPageTemplate() },
+  ];
+}
+
 function templateFiles(recipe: string): TemplateFile[] {
+  if (recipe === "cart-checkout") return cartTemplateFiles();
   const files: TemplateFile[] = [
     {
       filePath: "src/lib/eazo-payments/catalog.ts",
@@ -1083,6 +1346,7 @@ function printUsage() {
   eazo-sdk payments doctor [--minimum-version <version>] [--cwd <path>]
   eazo-sdk payments init --recipe one-time-unlock [--minimum-version <version>] [--force] [--cwd <path>]
   eazo-sdk payments init --recipe monthly-subscription [--minimum-version <version>] [--force] [--cwd <path>]
+  eazo-sdk payments init --recipe cart-checkout [--minimum-version <version>] [--force] [--cwd <path>]
 
 Commands:
   payments doctor Validate the declared, installed, and exported Payment SDK contract.

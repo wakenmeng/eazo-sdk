@@ -173,6 +173,162 @@ export function EazoPaymentCancelPage({
   );
 }
 
+type EazoCartStatusResponse = EazoPaymentStatus & {
+  fulfilled?: boolean;
+} & EazoPaymentApiErrorBody;
+
+export type EazoCartPaymentSuccessPageProps = EazoPaymentSuccessPageProps & {
+  statusEndpoint?: string;
+};
+
+/** Polls the app's cart status route, which grants the purchase once the payment is paid. */
+export function EazoCartPaymentSuccessPage({
+  homeHref = "/",
+  continueLabel = "Continue",
+  homeLabel = "Return home",
+  maxAttempts = 15,
+  pollIntervalMs = 1500,
+  className,
+  statusEndpoint = "/api/payments/cart-status",
+}: EazoCartPaymentSuccessPageProps) {
+  const [status, setStatus] = React.useState<EazoCartStatusResponse | null>(null);
+  const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    const paymentId = readEazoPaymentIdFromUrl() || readRememberedEazoPaymentId();
+    if (!paymentId) {
+      setError("We could not find this payment. Please return to the app and try again.");
+      return;
+    }
+    const confirmedPaymentId = paymentId;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    async function poll() {
+      attempts += 1;
+      const headers = await getEazoPaymentSessionHeaders();
+      const response = await fetch(`${statusEndpoint}?paymentId=${encodeURIComponent(confirmedPaymentId)}`, {
+        headers,
+        cache: "no-store",
+      });
+      const data = (await response.json().catch(() => ({}))) as EazoCartStatusResponse;
+      if (cancelled) return;
+
+      if (data.paid && !data.fulfilled) {
+        // Paid but the app could not deliver yet; EazoCartPaymentSync retries later.
+        setStatus(data);
+        clearRememberedEazoPaymentId();
+        return;
+      }
+      if (!response.ok) {
+        setError(getEazoPaymentErrorMessage(data, "Payment status failed"));
+        return;
+      }
+
+      setStatus(data);
+      if (data.paid) {
+        clearRememberedEazoPaymentId();
+        return;
+      }
+      if (POLLABLE_STATUSES.has(data.status)) {
+        if (attempts < maxAttempts) {
+          window.setTimeout(poll, pollIntervalMs);
+          return;
+        }
+        setError("Payment is still processing. Your items will arrive once it completes.");
+      }
+    }
+
+    poll().catch((err) => {
+      setError(err instanceof Error ? err.message : "Payment status failed");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [maxAttempts, pollIntervalMs, statusEndpoint]);
+
+  if (error) {
+    return (
+      <PaymentStateShell
+        className={className}
+        tone="attention"
+        eyebrow="Payment"
+        title="Payment needs attention"
+        description={error}
+        actionHref={homeHref}
+        actionLabel={homeLabel}
+      />
+    );
+  }
+
+  if (status?.paid) {
+    return (
+      <PaymentStateShell
+        className={className}
+        tone={status.fulfilled ? "success" : "attention"}
+        eyebrow="Payment"
+        title={status.fulfilled ? "Purchase complete" : "Payment received"}
+        description={
+          status.fulfilled
+            ? "Your items have been added."
+            : "Your items are on the way and will appear the next time you open the app."
+        }
+        actionHref={homeHref}
+        actionLabel={continueLabel}
+        detail={status.product_name}
+      />
+    );
+  }
+
+  if (status && !POLLABLE_STATUSES.has(status.status)) {
+    return (
+      <PaymentStateShell
+        className={className}
+        tone="failed"
+        eyebrow="Checkout"
+        title="Payment was not completed"
+        description={`Status: ${status.status}`}
+        actionHref={homeHref}
+        actionLabel="Try again"
+        detail={status.product_name}
+      />
+    );
+  }
+
+  return (
+    <PaymentStateShell
+      className={className}
+      tone="processing"
+      eyebrow="Payment"
+      title="Confirming payment"
+      description="This usually takes a few seconds."
+    />
+  );
+}
+
+/**
+ * Asks the app's cart sync route to deliver any paid cart that was not granted
+ * yet, e.g. when the buyer closed the page before returning from checkout.
+ * Mount once in the app layout; it does nothing for signed-out users.
+ */
+export function EazoCartPaymentSync({ endpoint = "/api/payments/cart-sync" }: { endpoint?: string }) {
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const headers = await getEazoPaymentSessionHeaders();
+      if (cancelled || !headers["x-eazo-session"]) return;
+      await fetch(endpoint, { method: "POST", headers, cache: "no-store" });
+    })().catch(() => {
+      // Best effort: the next app open retries.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoint]);
+  return null;
+}
+
 type PaymentStateTone = "processing" | "success" | "attention" | "failed" | "neutral";
 
 type PaymentStateShellProps = {
