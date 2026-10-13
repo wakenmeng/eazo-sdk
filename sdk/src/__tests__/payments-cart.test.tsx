@@ -29,6 +29,7 @@ import {
   assertLocalCartCheckoutBodyContract,
   assertNoLegacyPaymentFlowSource,
   mockEazoCartPayment,
+  mockEazoCartPaymentFromResolution,
   mockEazoCheckoutResponse,
 } from "../payments.testing";
 import { auth } from "../internal/capabilities/auth";
@@ -96,8 +97,8 @@ describe("Eazo cart checkout SDK", () => {
   });
 
   it("validates cart lines against the cart total instead of the single-product ceiling", () => {
-    expect(assertEazoCartItems(ITEMS, "usd")).toBe(897);
-    expect(assertEazoCartItems([{ name: "Bundle", unitAmount: 450_000 }], "usd")).toBe(450_000);
+    expect(assertEazoCartItems(ITEMS, "usd")).toEqual({ subtotal: 897, discountAmount: 0, total: 897 });
+    expect(assertEazoCartItems([{ name: "Bundle", unitAmount: 450_000 }], "usd").total).toBe(450_000);
     expect(() => assertEazoCartItems([], "usd")).toThrow("non-empty");
     expect(() => assertEazoCartItems([{ name: "Bundle", unitAmount: 300_000, quantity: 2 }], "usd"))
       .toThrow("cart total for USD must not exceed 500000");
@@ -106,6 +107,53 @@ describe("Eazo cart checkout SDK", () => {
       .toThrow("quantity must be an integer from 1 to 999");
     expect(() => assertEazoCartItems([{ name: " ", unitAmount: 100 }], "usd")).toThrow("name is required");
     expect(() => assertEazoCartItems([{ name: "Odd", unitAmount: 150 }], "isk")).toThrow("multiple of 100");
+  });
+
+  it("validates unlock items and discounts", () => {
+    expect(assertEazoCartItems(
+      [{ name: "Red Skin", unitAmount: 500, entitlementKey: "skin_red" }, { name: "Gems", unitAmount: 400, quantity: 2 }],
+      "usd",
+      { discountAmount: 300 },
+    )).toEqual({ subtotal: 1300, discountAmount: 300, total: 1000 });
+    expect(() => assertEazoCartItems([{ name: "Skin", unitAmount: 500, quantity: 2, entitlementKey: "skin_red" }], "usd"))
+      .toThrow("must have quantity 1");
+    expect(() => assertEazoCartItems([
+      { name: "Skin", unitAmount: 500, entitlementKey: "skin_red" },
+      { name: "Skin 2", unitAmount: 500, entitlementKey: "skin_red" },
+    ], "usd")).toThrow("appears more than once");
+    expect(() => assertEazoCartItems([{ name: "Skin", unitAmount: 500, entitlementKey: "Bad Key" }], "usd"))
+      .toThrow("entitlementKey");
+    expect(() => assertEazoCartItems([{ name: "Gems", unitAmount: 500 }], "usd", { discountAmount: 500 }))
+      .toThrow("discountAmount");
+    expect(() => assertEazoCartItems([{ name: "Gems", unitAmount: 500 }], "usd", { discountAmount: 460 }))
+      .toThrow("after discount for USD must be at least 50");
+  });
+
+  it("sends unlock keys and the discount only when present", () => {
+    const request = buildEazoCartCheckoutRequest({
+      appUserId: "app_user_test",
+      currency: "usd",
+      items: [{ name: "Red Skin", unitAmount: 500, entitlementKey: "skin_red" }, { name: "Gems", unitAmount: 400, quantity: 2 }],
+      discountAmount: 300,
+      discountLabel: "Spend 10 save 3",
+      successUrl: "https://app.example.com/s",
+      cancelUrl: "https://app.example.com/c",
+      idempotencyKey: "cart-once",
+    });
+    assertEazoCartCheckoutRequestContract(request);
+    expect(request.items).toEqual([
+      { name: "Red Skin", unit_amount: 500, quantity: 1, metadata: {}, entitlement_key: "skin_red" },
+      { name: "Gems", unit_amount: 400, quantity: 2, metadata: {} },
+    ]);
+    expect(request).toMatchObject({ discount_amount: 300, discount_label: "Spend 10 save 3" });
+    expect(() => buildEazoCartCheckoutRequest({
+      appUserId: "app_user_test",
+      currency: "usd",
+      items: ITEMS,
+      discountLabel: "No amount",
+      successUrl: "https://app.example.com/s",
+      cancelUrl: "https://app.example.com/c",
+    })).toThrow("discountLabel requires discountAmount");
   });
 
   it("builds the exact cart checkout DTO", () => {
@@ -208,40 +256,45 @@ describe("Eazo cart checkout SDK", () => {
     mockPlatformResponse(200, { checkoutUrl: "https://checkout.stripe.com/c/pay/cs_cart", paymentId: "cap_cart" });
     const redirect = vi.fn();
 
-    await startEazoCartCheckout([{ id: "gem_100", quantity: 2 }], { redirect });
+    await startEazoCartCheckout([{ id: "gem_100", quantity: 2 }], { redirect, data: { couponCode: "NEW3" } });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe("/api/payments/cart-checkout");
-    assertLocalCartCheckoutBodyContract(JSON.parse(String(init?.body)));
+    const body = JSON.parse(String(init?.body));
+    assertLocalCartCheckoutBodyContract(body);
+    expect(body).toEqual({ lines: [{ id: "gem_100", quantity: 2 }], data: { couponCode: "NEW3" } });
     expect(readRememberedEazoPaymentId()).toBe("cap_cart");
     expect(redirect).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_cart");
   });
 
   it("prices carts on the server through resolveCart", async () => {
     mockPlatformResponse(200, mockEazoCheckoutResponse());
-    const resolveCart = vi.fn(({ lines }) => ({
+    const resolveCart = vi.fn(({ lines, data }) => ({
       currency: "usd" as const,
       items: lines.map((line: { id: string; quantity: number }) => ({
         name: line.id,
         unitAmount: 300,
         quantity: line.quantity,
       })),
+      ...(data.couponCode === "NEW3" ? { discountAmount: 100, discountLabel: "New user" } : {}),
     }));
     const POST = createEazoCartCheckoutRoute({ resolveCart, getUser });
 
     const response = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
       method: "POST",
-      body: JSON.stringify({ lines: [{ id: "gem_100", quantity: 3 }] }),
+      body: JSON.stringify({ lines: [{ id: "gem_100", quantity: 3 }], data: { couponCode: "NEW3" } }),
     }));
 
     expect(response.status).toBe(200);
     expect(resolveCart).toHaveBeenCalledWith(expect.objectContaining({
       lines: [{ id: "gem_100", quantity: 3 }],
+      data: { couponCode: "NEW3" },
       user: TEST_USER,
     }));
     const body = lastRequestBody();
     assertEazoCartCheckoutRequestContract(body);
     expect(body.items).toEqual([{ name: "gem_100", unit_amount: 300, quantity: 3, metadata: {} }]);
+    expect(body).toMatchObject({ discount_amount: 100, discount_label: "New user" });
     expect(body.success_url).toBe("https://app.example.com/payment/cart/success");
     expect(body.cancel_url).toBe("https://app.example.com/payment/cart/cancel");
   });
@@ -250,6 +303,11 @@ describe("Eazo cart checkout SDK", () => {
     global.fetch = vi.fn() as unknown as typeof fetch;
     const POST = createEazoCartCheckoutRoute({ resolveCart: () => null, getUser });
 
+    const badData = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
+      method: "POST",
+      body: JSON.stringify({ lines: [{ id: "a", quantity: 1 }], data: { discountAmount: 500 } }),
+    }));
+    expect(badData.status).toBe(400);
     for (const lines of [undefined, [], [{ id: "", quantity: 1 }], [{ id: "a", quantity: 0 }], [{ id: "a", quantity: 1.5 }]]) {
       const response = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
         method: "POST",
@@ -340,8 +398,10 @@ describe("Eazo cart checkout SDK", () => {
     render(<EazoCartPaymentSuccessPage />);
 
     await waitFor(() => expect(screen.getByText("Purchase complete")).toBeTruthy());
-    const [url] = vi.mocked(fetch).mock.calls[0];
-    expect(url).toBe("/api/payments/cart-status?paymentId=cap_test_cart");
+    const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(urls[0]).toBe("/api/payments/cart-status?paymentId=cap_test_cart");
+    // The cart's unlock line refreshes its entitlement so gates update.
+    expect(urls.some((url) => url.startsWith("/api/payments/entitlements?") && url.includes("skin_red"))).toBe(true);
   });
 
   it("tells the buyer delivery is pending when payment succeeded but fulfill failed", async () => {
@@ -352,6 +412,17 @@ describe("Eazo cart checkout SDK", () => {
     render(<EazoCartPaymentSuccessPage />);
 
     await waitFor(() => expect(screen.getByText("Payment received")).toBeTruthy());
+  });
+
+  it("builds a paid mock payment from a resolved cart", () => {
+    const payment = mockEazoCartPaymentFromResolution({
+      currency: "usd",
+      items: [{ name: "Red Skin", unitAmount: 500, entitlementKey: "skin_red" }, { name: "Gems", unitAmount: 400, quantity: 2 }],
+      discountAmount: 300,
+      metadata: { coupon_id: "c_1" },
+    });
+    expect(payment).toMatchObject({ paid: true, amount_subtotal: 1300, discount_amount: 300, amount_total: 1000 });
+    expect(payment.line_items.map((line) => line.entitlement_key)).toEqual(["skin_red", null]);
   });
 
   it("scaffolds the cart-checkout recipe with thin routes and an explicit fulfill stub", () => {
@@ -372,6 +443,8 @@ describe("Eazo cart checkout SDK", () => {
     const cart = fs.readFileSync(path.join(cwd, "src/lib/eazo-payments/cart.ts"), "utf8");
     expect(cart).toContain("export async function resolveCart");
     expect(cart).toContain("Implement fulfillCartPayment");
+    expect(cart).toContain("entitlementKey: \"skin_red\"");
+    expect(cart).toContain("ON CONFLICT (payment_id) DO NOTHING");
     expect(cart).not.toContain("productKey");
     for (const file of result.files) {
       const source = fs.readFileSync(path.join(cwd, file), "utf8");

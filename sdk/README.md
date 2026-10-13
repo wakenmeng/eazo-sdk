@@ -244,9 +244,15 @@ The app writes two functions in `src/lib/eazo-payments/cart.ts`:
   app's own server-side data and returns `{ currency, items }`, or `null` to
   reject the cart. Up to 100 lines, quantity 1–999, and a cart total of at most
   USD 5,000 (`getEazoCartMaximumAmount(currency)`).
-- `fulfillCartPayment(payment, { user })` grants `payment.line_items` to the
-  user. It runs only for paid cart payments and must be idempotent by
-  `payment.payment_id`.
+- `fulfillCartPayment(payment, { user })` grants the consumable lines of
+  `payment.line_items` to the user. It runs only for paid cart payments and must
+  be idempotent by `payment.payment_id`.
+
+Unlock items (owned forever) set `entitlementKey` with quantity 1; Eazo grants
+the entitlement itself, so read it with `useEazoEntitlement(key)`. A cart may mix
+unlock items and consumables. `resolveCart` may also return `discountAmount` and
+`discountLabel`, computed on the server from the app's own rules (for example a
+coupon code passed through `startEazoCartCheckout(lines, { data })`).
 
 The browser starts checkout with `startEazoCartCheckout(lines)` (or the
 scaffolded `CartCheckoutButton`). Delivery runs on the server from the success

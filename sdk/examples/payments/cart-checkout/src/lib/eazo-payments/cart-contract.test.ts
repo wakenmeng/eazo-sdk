@@ -7,6 +7,7 @@ import {
   assertEazoCartCheckoutRequestContract,
   assertNoLegacyPaymentFlowSource,
   mockEazoCartPayment,
+  mockEazoCartPaymentFromResolution,
 } from "@eazo/sdk/payments/testing";
 import { fulfillCartPayment, resolveCart, SHOP_ITEMS } from "./cart";
 
@@ -45,15 +46,20 @@ describe("Eazo cart checkout contract", () => {
     vi.restoreAllMocks();
   });
 
+  function allItemLines() {
+    return Object.entries(SHOP_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
+  }
+
   it("prices every shop item on the server into a valid platform request", async () => {
-    const lines = Object.keys(SHOP_ITEMS).map((id) => ({ id, quantity: 2 }));
-    const cart = await resolveCart({ lines });
+    const cart = await resolveCart({ lines: allItemLines(), data: {} });
     expect(cart).not.toBeNull();
 
     const request = buildEazoCartCheckoutRequest({
       appUserId: TEST_USER.id,
       currency: cart!.currency,
       items: cart!.items,
+      discountAmount: cart!.discountAmount,
+      discountLabel: cart!.discountLabel,
       metadata: cart!.metadata,
       successUrl: "https://app.example.com/payment/cart/success",
       cancelUrl: "https://app.example.com/payment/cart/cancel",
@@ -62,13 +68,15 @@ describe("Eazo cart checkout contract", () => {
   });
 
   it("rejects carts with unknown items", async () => {
-    await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }] })).resolves.toBeNull();
+    await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
   });
 
-  it("fulfills a paid cart and tolerates repeated delivery of the same payment", async () => {
-    const payment = mockEazoCartPayment("succeeded");
+  it("fulfills a paid cart of every shop item and tolerates repeated delivery", async () => {
+    const cart = await resolveCart({ lines: allItemLines(), data: {} });
+    const payment = mockEazoCartPaymentFromResolution(cart!);
     await fulfillCartPayment(payment, { user: TEST_USER });
     await fulfillCartPayment(payment, { user: TEST_USER });
+    // Add assertions on the app's own storage: consumables were granted once.
   });
 
   it("only fulfills cart payments that are paid", async () => {

@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assertions (`@eazo/sdk/payments/testing`). Cart totals are capped at USD 5,000
   (per-currency equivalents); one-time and subscription prices keep the USD 700
   cap. Requires the Creator `mode=cart` checkout API.
+- Cart unlock items: `EazoCartItem.entitlementKey` (quantity 1) makes Eazo grant
+  that entitlement when the cart is paid; the cart success page refreshes it.
+- Cart discounts: `resolveCart` may return `discountAmount` / `discountLabel`
+  computed by the app (e.g. from its own coupons); Eazo shows it on Checkout and
+  charges the discounted total. `startEazoCartCheckout(lines, { data })` passes
+  string values such as a coupon code to `resolveCart`.
+- `mockEazoCartPaymentFromResolution` testing helper.
 - `eazo-sdk payments init --recipe cart-checkout` scaffold and the
   `examples/payments/cart-checkout` reference app.
 

@@ -4,6 +4,7 @@ import {
   assertEazoPaymentMode,
   assertEazoPaymentProductKey,
   assertEazoPaymentUnitAmount,
+  EAZO_CART_DISCOUNT_LABEL_MAX_LENGTH,
   EAZO_CART_PAYMENT_MODE,
   EAZO_PAYMENT_MODE,
   EazoPaymentApiError,
@@ -158,7 +159,11 @@ export function buildEazoCartCheckoutRequest(
   if (!input.appUserId || typeof input.appUserId !== "string") {
     throw new Error("appUserId is required for cart checkout");
   }
-  assertEazoCartItems(input.items, input.currency);
+  const totals = assertEazoCartItems(input.items, input.currency, { discountAmount: input.discountAmount });
+  const discountLabel = input.discountLabel?.trim();
+  if (discountLabel && totals.discountAmount === 0) {
+    throw new Error("discountLabel requires discountAmount");
+  }
 
   return {
     app_id: appId,
@@ -170,7 +175,14 @@ export function buildEazoCartCheckoutRequest(
       unit_amount: item.unitAmount,
       quantity: item.quantity ?? 1,
       metadata: item.metadata || {},
+      ...(item.entitlementKey ? { entitlement_key: item.entitlementKey } : {}),
     })),
+    ...(totals.discountAmount > 0
+      ? {
+        discount_amount: totals.discountAmount,
+        ...(discountLabel ? { discount_label: discountLabel.slice(0, EAZO_CART_DISCOUNT_LABEL_MAX_LENGTH) } : {}),
+      }
+      : {}),
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
     metadata: input.metadata || {},
@@ -369,6 +381,7 @@ export type {
   EazoCartLineItem,
   EazoCartPayment,
   EazoCartPaymentsResponse,
+  EazoCartTotals,
   CreateEazoCheckoutResult,
   EazoCheckoutSessionRequest,
   EazoCheckoutSessionResponse,

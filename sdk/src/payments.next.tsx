@@ -343,12 +343,19 @@ export function createEazoResumeSubscriptionRoute(options: {
 }
 
 const CART_LINE_ID_MAX_LENGTH = 128;
+const CART_DATA_MAX_KEYS = 20;
+const CART_DATA_VALUE_MAX_LENGTH = 500;
 const CART_SYNC_PAGE_SIZE = 100;
 const CART_SYNC_MAX_PAGES = 10;
 
 export type EazoCartResolution = {
   currency: EazoPaymentCurrency;
   items: EazoCartItem[];
+  /** Amount off the subtotal, computed here on the server (e.g. from the app's own coupon). */
+  discountAmount?: number;
+  /** Shown next to the discount on the Stripe checkout page. */
+  discountLabel?: string;
+  /** Returned on the paid payment, e.g. { coupon_id } so fulfill can mark it used. */
   metadata?: EazoPaymentMetadata;
 };
 
@@ -365,6 +372,8 @@ export type EazoCartCheckoutRouteOptions = {
    */
   resolveCart: (input: {
     lines: EazoCartLine[];
+    /** Untrusted string values from startEazoCartCheckout({ data }), e.g. a coupon code. */
+    data: Record<string, string>;
     user: User;
     request: Request;
   }) => EazoCartResolution | null | undefined | Promise<EazoCartResolution | null | undefined>;
@@ -414,13 +423,35 @@ function parseCartLines(body: JsonBody): EazoCartLine[] | null {
   return parsed;
 }
 
+function parseCartData(body: JsonBody): Record<string, string> | null {
+  const data = body.data;
+  if (data === undefined) return {};
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const entries = Object.entries(data as Record<string, unknown>);
+  if (entries.length > CART_DATA_MAX_KEYS) return null;
+  const parsed: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (typeof value !== "string" || value.length > CART_DATA_VALUE_MAX_LENGTH) return null;
+    parsed[key] = value;
+  }
+  return parsed;
+}
+
 export function createEazoCartCheckoutRoute(options: EazoCartCheckoutRouteOptions) {
   const successPath = options.successPath || "/payment/cart/success";
   const cancelPath = options.cancelPath || "/payment/cart/cancel";
 
   return async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
-    const lines = parseCartLines(body && typeof body === "object" ? body as JsonBody : {});
+    const bodyRecord = body && typeof body === "object" ? body as JsonBody : {};
+    const lines = parseCartLines(bodyRecord);
+    const data = parseCartData(bodyRecord);
+    if (!data) {
+      return jsonResponse(
+        { error: `Invalid cart data: send at most ${CART_DATA_MAX_KEYS} string values` },
+        { status: 400 },
+      );
+    }
     if (!lines) {
       return jsonResponse(
         { error: `Invalid cart: send lines as [{ id, quantity }] with 1-${EAZO_CART_MAX_LINE_ITEMS} entries` },
@@ -432,7 +463,7 @@ export function createEazoCartCheckoutRoute(options: EazoCartCheckoutRouteOption
     if (!authResult.ok) return authResult.response;
 
     try {
-      const cart = await options.resolveCart({ lines, user: authResult.user, request });
+      const cart = await options.resolveCart({ lines, data, user: authResult.user, request });
       if (!cart) {
         return jsonResponse({ error: "Invalid cart" }, { status: 400 });
       }
@@ -441,6 +472,8 @@ export function createEazoCartCheckoutRoute(options: EazoCartCheckoutRouteOption
         appUserId: authResult.user.id,
         currency: cart.currency,
         items: cart.items,
+        discountAmount: cart.discountAmount,
+        discountLabel: cart.discountLabel,
         metadata: cart.metadata,
         successUrl: `${origin}${successPath}`,
         cancelUrl: `${origin}${cancelPath}`,

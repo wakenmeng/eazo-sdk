@@ -629,6 +629,18 @@ export type EazoCartItem = {
   quantity?: number;
   /** Opaque app data returned with the paid payment, e.g. the app's own item id. */
   metadata?: EazoPaymentMetadata;
+  /**
+   * Set for unlock items (skins, levels, premium features): Eazo grants this
+   * entitlement when the cart is paid, readable with useEazoEntitlement(key).
+   * Unlock items must have quantity 1. Leave unset for consumables the app grants.
+   */
+  entitlementKey?: string;
+};
+
+export type EazoCartTotals = {
+  subtotal: number;
+  discountAmount: number;
+  total: number;
 };
 
 export type EazoCartLineItem = {
@@ -637,12 +649,17 @@ export type EazoCartLineItem = {
   quantity: number;
   amount_subtotal: number;
   metadata: EazoPaymentMetadata;
+  entitlement_key?: string | null;
 };
 
 export type CreateEazoCartCheckoutInput = {
   appUserId: string;
   currency: EazoPaymentCurrency;
   items: EazoCartItem[];
+  /** Amount off the subtotal, computed on the server by the app (e.g. from its own coupons). */
+  discountAmount?: number;
+  /** Shown on the Stripe checkout page next to the discount, at most 40 characters. */
+  discountLabel?: string;
   successUrl: string;
   cancelUrl: string;
   metadata?: EazoPaymentMetadata;
@@ -659,7 +676,10 @@ export type EazoCartCheckoutSessionRequest = {
     unit_amount: number;
     quantity: number;
     metadata: EazoPaymentMetadata;
+    entitlement_key?: string;
   }>;
+  discount_amount?: number;
+  discount_label?: string;
   success_url: string;
   cancel_url: string;
   metadata: EazoPaymentMetadata;
@@ -671,6 +691,11 @@ export type EazoCartPayment = EazoPaymentStatus & {
   mode: typeof EAZO_CART_PAYMENT_MODE;
   app_user_id: string;
   line_items: EazoCartLineItem[];
+  amount_subtotal?: number | null;
+  discount_amount?: number | null;
+  discount_label?: string | null;
+  /** Entitlements Eazo granted for the cart's unlock lines (status route only). */
+  entitlements?: EazoEntitlement[];
 };
 
 export type EazoCartPaymentsResponse = {
@@ -791,11 +816,18 @@ export function getEazoCartMaximumAmount(currency: EazoPaymentCurrency): number 
   return EAZO_CART_MAXIMUM_AMOUNT_BY_CURRENCY[currency];
 }
 
+export const EAZO_CART_DISCOUNT_LABEL_MAX_LENGTH = 40;
+
 /**
- * Validates cart lines and returns the total in minor units. Line prices keep the
- * per-currency minimum and multiple rules but only the cart total is capped.
+ * Validates cart lines and an optional discount, and returns the cart totals in
+ * minor units. Line prices keep the per-currency minimum and multiple rules; only
+ * the subtotal is capped. The charged total must still meet the currency minimum.
  */
-export function assertEazoCartItems(items: unknown, currency: EazoPaymentCurrency): number {
+export function assertEazoCartItems(
+  items: unknown,
+  currency: EazoPaymentCurrency,
+  options: { discountAmount?: number } = {},
+): EazoCartTotals {
   assertEazoPaymentCurrency(currency);
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("cart items must be a non-empty array");
@@ -804,6 +836,7 @@ export function assertEazoCartItems(items: unknown, currency: EazoPaymentCurrenc
     throw new Error(`cart allows at most ${EAZO_CART_MAX_LINE_ITEMS} items`);
   }
   const limits = getEazoPaymentPriceLimits(currency);
+  const entitlementKeys = new Set<string>();
   let total = 0;
   items.forEach((item: Partial<EazoCartItem>, index) => {
     const field = `items[${index}]`;
@@ -825,6 +858,16 @@ export function assertEazoCartItems(items: unknown, currency: EazoPaymentCurrenc
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > EAZO_CART_MAX_QUANTITY) {
       throw new Error(`${field}.quantity must be an integer from 1 to ${EAZO_CART_MAX_QUANTITY}`);
     }
+    if (item.entitlementKey !== undefined) {
+      assertEazoPaymentProductKey(item.entitlementKey, `${field}.entitlementKey`);
+      if (quantity !== 1) {
+        throw new Error(`${field} is an unlock item (entitlementKey) and must have quantity 1`);
+      }
+      if (entitlementKeys.has(item.entitlementKey)) {
+        throw new Error(`${field}.entitlementKey "${item.entitlementKey}" appears more than once`);
+      }
+      entitlementKeys.add(item.entitlementKey);
+    }
     total += (unitAmount as number) * quantity;
   });
   const maximum = getEazoCartMaximumAmount(currency);
@@ -833,7 +876,22 @@ export function assertEazoCartItems(items: unknown, currency: EazoPaymentCurrenc
       `cart total for ${currency.toUpperCase()} must not exceed ${maximum} in minor currency units`,
     );
   }
-  return total;
+  const discountAmount = options.discountAmount ?? 0;
+  if (!Number.isInteger(discountAmount) || discountAmount < 0 || discountAmount >= total) {
+    throw new Error("discountAmount must be an integer from 0 up to, but not including, the cart subtotal");
+  }
+  const charged = total - discountAmount;
+  if (charged < limits.minimumUnitAmount) {
+    throw new Error(
+      `cart total after discount for ${currency.toUpperCase()} must be at least ${limits.minimumUnitAmount} in minor currency units`,
+    );
+  }
+  if (discountAmount > 0 && charged % limits.unitAmountMultiple !== 0) {
+    throw new Error(
+      `cart total after discount for ${currency.toUpperCase()} must be a multiple of ${limits.unitAmountMultiple} in minor currency units`,
+    );
+  }
+  return { subtotal: total, discountAmount, total: charged };
 }
 
 export function assertEazoPaymentProductKey(value: unknown, field = "product key"): asserts value is string {
@@ -1071,7 +1129,12 @@ export async function startEazoCheckout(
  */
 export async function startEazoCartCheckout(
   lines: EazoCartLine[],
-  options: { endpoint?: string; redirect?: EazoCheckoutRedirect } = {},
+  options: {
+    /** Extra string values for the app's resolveCart, e.g. a coupon code. Never prices or amounts. */
+    data?: Record<string, string>;
+    endpoint?: string;
+    redirect?: EazoCheckoutRedirect;
+  } = {},
 ) {
   const endpoint = options.endpoint || "/api/payments/cart-checkout";
   const redirect = options.redirect || ((checkoutUrl: string) => {
@@ -1086,7 +1149,7 @@ export async function startEazoCartCheckout(
       "Content-Type": "application/json",
       ...(sessionHeader ? { "x-eazo-session": sessionHeader } : {}),
     },
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify(options.data ? { lines, data: options.data } : { lines }),
   });
   const data = await response.json().catch(() => ({}));
   const checkout = normalizeEazoCheckoutResult(data as EazoCheckoutSessionResponseLike);

@@ -1,6 +1,7 @@
 import type {
   CreateEazoCheckoutResult,
   EazoCartCheckoutSessionRequest,
+  EazoCartItem,
   EazoCartPayment,
   EazoAppSubscription,
   EazoAppSubscriptionsResponse,
@@ -63,12 +64,48 @@ export function mockEazoCartPayment(
     product_name: "100 Gems ×2 + 1 more",
     metadata: {},
     line_items: [
-      { name: "100 Gems", unit_amount: 199, quantity: 2, amount_subtotal: 398, metadata: { item_id: "gem_100" } },
-      { name: "Red Skin", unit_amount: 499, quantity: 1, amount_subtotal: 499, metadata: { item_id: "skin_red" } },
+      { name: "100 Gems", unit_amount: 199, quantity: 2, amount_subtotal: 398, metadata: { item_id: "gem_100" }, entitlement_key: null },
+      { name: "Red Skin", unit_amount: 499, quantity: 1, amount_subtotal: 499, metadata: { item_id: "skin_red" }, entitlement_key: "skin_red" },
     ],
+    amount_subtotal: 897,
+    discount_amount: null,
+    discount_label: null,
     entitlement: null,
     ...overrides,
   };
+}
+
+/** A paid (by default) cart payment built from what the app's resolveCart returned. */
+export function mockEazoCartPaymentFromResolution(
+  resolution: {
+    currency: EazoPaymentCurrency;
+    items: EazoCartItem[];
+    discountAmount?: number;
+    discountLabel?: string;
+    metadata?: Record<string, string>;
+  },
+  overrides: Partial<EazoCartPayment> = {},
+): EazoCartPayment {
+  const lineItems = resolution.items.map((item) => ({
+    name: item.name,
+    unit_amount: item.unitAmount,
+    quantity: item.quantity ?? 1,
+    amount_subtotal: item.unitAmount * (item.quantity ?? 1),
+    metadata: item.metadata || {},
+    entitlement_key: item.entitlementKey ?? null,
+  }));
+  const subtotal = lineItems.reduce((sum, line) => sum + line.amount_subtotal, 0);
+  const discount = resolution.discountAmount ?? 0;
+  return mockEazoCartPayment("succeeded", {
+    currency: resolution.currency,
+    line_items: lineItems,
+    amount_subtotal: subtotal,
+    amount_total: subtotal - discount,
+    discount_amount: discount || null,
+    discount_label: resolution.discountLabel ?? null,
+    metadata: resolution.metadata || {},
+    ...overrides,
+  });
 }
 
 export function mockEazoEntitlement(
@@ -266,6 +303,8 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
       "mode",
       "currency",
       "items",
+      ...(body.discount_amount === undefined ? [] : ["discount_amount"]),
+      ...(body.discount_label === undefined ? [] : ["discount_label"]),
       "success_url",
       "cancel_url",
       "metadata",
@@ -282,7 +321,11 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
   if (!Array.isArray(body.items)) throw new Error("items must be an array");
   body.items.forEach((item, index) => {
     assertRecord(item, `items[${index}]`);
-    assertExactKeys(item, ["name", "unit_amount", "quantity", "metadata"], `items[${index}]`);
+    assertExactKeys(
+      item,
+      ["name", "unit_amount", "quantity", "metadata", ...(item.entitlement_key === undefined ? [] : ["entitlement_key"])],
+      `items[${index}]`,
+    );
     assertMetadata(item.metadata, `items[${index}].metadata`);
   });
   assertEazoCartItems(
@@ -290,8 +333,10 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
       name: item.name as string,
       unitAmount: item.unit_amount as number,
       quantity: item.quantity as number,
+      ...(item.entitlement_key === undefined ? {} : { entitlementKey: item.entitlement_key as string }),
     })),
     body.currency,
+    { discountAmount: body.discount_amount as number | undefined },
   );
   assertString(body.success_url, "success_url");
   assertString(body.cancel_url, "cancel_url");
@@ -301,7 +346,7 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
 
 export function assertLocalCartCheckoutBodyContract(body: unknown) {
   assertRecord(body, "local cart checkout body");
-  assertExactKeys(body, ["lines"], "local cart checkout body");
+  assertExactKeys(body, ["lines", ...(body.data === undefined ? [] : ["data"])], "local cart checkout body");
   if (!Array.isArray(body.lines)) throw new Error("lines must be an array");
   body.lines.forEach((line, index) => {
     assertRecord(line, `lines[${index}]`);

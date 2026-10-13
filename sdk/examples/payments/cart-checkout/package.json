@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@eazo/sdk": ">=0.23.0-cart.1",
+    "@eazo/sdk": ">=0.23.0-cart.2",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

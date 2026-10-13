@@ -228,6 +228,11 @@ export function EazoCartPaymentSuccessPage({
 
       setStatus(data);
       if (data.paid) {
+        // Unlock lines are granted by Eazo; refresh them so entitlement gates update.
+        const unlockKeys = (data.line_items || [])
+          .map((line) => line.entitlement_key)
+          .filter((key): key is string => Boolean(key));
+        await Promise.all(unlockKeys.map((key) => refreshEazoEntitlement(key).catch(() => null)));
         clearRememberedEazoPaymentId();
         return;
       }

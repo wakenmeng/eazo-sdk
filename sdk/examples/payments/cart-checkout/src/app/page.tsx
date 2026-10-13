@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { EazoEntitlementGate } from "@eazo/sdk/payments/react";
 import { CartCheckoutButton } from "@/components/eazo-payments/CartCheckoutButton";
 
 // Display copy only. The server prices carts from SHOP_ITEMS in
 // src/lib/eazo-payments/cart.ts; the browser sends item ids and quantities.
 const PRODUCTS = [
-  { id: "gem_100", name: "100 Gems", price: "$1.99" },
-  { id: "skin_red", name: "Red Skin", price: "$4.99" },
+  { id: "skin_red", name: "Red Skin", price: "$4.99", unlock: true },
+  { id: "gem_100", name: "100 Gems", price: "$1.99", unlock: false },
 ];
 
 export default function ShopPage() {
@@ -19,7 +20,8 @@ export default function ShopPage() {
   function change(id: string, delta: number) {
     setQuantities((current) => ({
       ...current,
-      [id]: Math.min(999, Math.max(0, (current[id] ?? 0) + delta)),
+      // Unlock items are bought at most once per cart.
+      [id]: Math.min(PRODUCTS.find((p) => p.id === id)?.unlock ? 1 : 999, Math.max(0, (current[id] ?? 0) + delta)),
     }));
   }
 
@@ -44,6 +46,11 @@ export default function ShopPage() {
         ))}
       </ul>
       <CartCheckoutButton lines={lines}>Checkout</CartCheckoutButton>
+      <EazoEntitlementGate
+        productKey="skin_red"
+        paid={<p>Red Skin unlocked.</p>}
+        free={<p>Red Skin not owned yet.</p>}
+      />
     </main>
   );
 }

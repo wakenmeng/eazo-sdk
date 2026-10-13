@@ -11,6 +11,9 @@ items are, their prices, and what the buyer receives stay in the app.
 - A shop page whose cart is plain React state (`{ id, quantity }` lines).
 - Server-side pricing: `resolveCart` turns item ids into priced lines from the
   app's own data. Browser prices are never trusted.
+- Two kinds of items in one cart: an unlock item (`skin_red`, with
+  `entitlementKey`) that Eazo grants as an entitlement, and a consumable
+  (`gem_100`) that the app grants itself.
 - Same-window redirect to Stripe Checkout with `startEazoCartCheckout`.
 - Delivery on the server through `fulfillCartPayment`, called only for paid
   cart payments and idempotent by `payment_id`.
@@ -38,9 +41,17 @@ src/app/page.tsx                              shop UI
 
 ### `resolveCart({ lines })`
 
-Receives the browser's `{ id, quantity }` lines and returns
-`{ currency, items }`, where each item is `{ name, unitAmount, quantity, metadata }`.
-Return `null` when any id is unknown or unavailable.
+Receives the browser's `{ id, quantity }` lines (plus optional string `data`
+such as a coupon code) and returns `{ currency, items, discountAmount?,
+discountLabel?, metadata? }`, where each item is
+`{ name, unitAmount, quantity, metadata, entitlementKey? }`. Return `null` when
+any id is unknown or unavailable.
+
+- Unlock items set `entitlementKey` and quantity 1; Eazo grants the entitlement
+  when paid, read it with `useEazoEntitlement(key)` / `EazoEntitlementGate`.
+- Discounts are the app's business: compute `discountAmount` here on the server
+  (for example from the app's own coupon table). Eazo only checks that it is
+  below the subtotal and that the charged total meets the currency minimum.
 
 - `unitAmount` is integer minor units (cents for USD).
 - One cart uses one currency, has at most 100 lines, each quantity 1–999.
@@ -51,10 +62,12 @@ Return `null` when any id is unknown or unavailable.
 
 ### `fulfillCartPayment(payment, { user })`
 
-Grants `payment.line_items` to `user.id`. It must be idempotent by
-`payment.payment_id`: Eazo may call it from the success page and again from the
-sync route. Write the payment id (unique) and the granted goods in one database
-transaction. The in-memory version in this example is for demonstration only.
+Grants the consumable lines of `payment.line_items` (those without
+`entitlement_key`) to `user.id`. It must be idempotent by `payment.payment_id`:
+Eazo may call it from the success page and again from the sync route. Use
+`INSERT ... ON CONFLICT (payment_id) DO NOTHING RETURNING` and grant only when a
+row comes back, in one transaction. The in-memory version in this example is for
+demonstration only.
 
 ## Rules
 
