@@ -1,76 +1,50 @@
 # Eazo Payments Cart Checkout Example
 
-Complete Next.js App Router example for buying several items, each in any
-quantity, in one Eazo checkout.
+One payment for several line items, or more than one of the same item.
 
-Eazo only collects the money and reports whether a payment is paid. What the
-items are, their prices, and what the buyer receives stay in the app.
+## Boundary
 
-## What This Example Implements
+Eazo charges one Stripe Checkout for the lines the app priced, applies an
+optional app-computed discount, grants an entitlement for each line with
+`entitlementKey`, and reports whether the payment is paid.
 
-- A shop page whose cart is plain React state (`{ id, quantity }` lines).
-- Server-side pricing: `resolveCart` turns item ids into priced lines from the
-  app's own data. Browser prices are never trusted.
-- Two kinds of items in one cart: an unlock item (`skin_red`, with
-  `entitlementKey`) that Eazo grants as an entitlement, and a consumable
-  (`gem_100`) that the app grants itself.
-- Same-window redirect to Stripe Checkout with `startEazoCartCheckout`.
-- Delivery on the server through `fulfillCartPayment`, called only for paid
-  cart payments and idempotent by `payment_id`.
-- Two delivery triggers: the success page (`/payment/cart/success`) and
-  `CartPaymentSync` in the root layout, which delivers paid carts the buyer
-  never returned from.
+The app prices the lines on its server (`resolveCart`) and grants lines without
+`entitlementKey` (`fulfillCartPayment`), once per payment.
 
-## File Map
+## Files
 
 ```text
-src/lib/eazo-payments/cart.ts                 items, resolveCart, fulfillCartPayment
-src/lib/eazo-payments/cart-contract.test.ts   contract tests
+src/lib/eazo-payments/cart.ts                CART_ITEMS, resolveCart, fulfillCartPayment
+src/lib/eazo-payments/cart-contract.test.ts
 src/components/eazo-payments/CartCheckoutButton.tsx
-src/components/eazo-payments/CartPaymentSync.tsx
-src/app/api/payments/cart-checkout/route.ts   createEazoCartCheckoutRoute({ resolveCart })
-src/app/api/payments/cart-status/route.ts     createEazoCartPaymentStatusRoute({ fulfill })
-src/app/api/payments/cart-sync/route.ts       createEazoCartSyncRoute({ fulfill })
-src/app/payment/cart/success/page.tsx
-src/app/payment/cart/cancel/page.tsx
-src/app/layout.tsx                            mounts CartPaymentSync
-src/app/page.tsx                              shop UI
+src/components/eazo-payments/CartPaymentSync.tsx   mounted in src/app/layout.tsx
+src/app/api/payments/checkout/route.ts       createEazoCheckoutRoute({ resolveCart })
+src/app/api/payments/status/route.ts         createEazoPaymentStatusRoute({ fulfill: fulfillCartPayment })
+src/app/api/payments/sync/route.ts           createEazoCartSyncRoute({ fulfill: fulfillCartPayment })
+src/app/payment/success/page.tsx
+src/app/payment/cancel/page.tsx
 ```
 
-## The Two Functions the App Writes
+`checkout`, `status`, `success` and `cancel` are the same routes the one-time and
+subscription recipes use; an app with both passes `getProduct` and
+`resolveCart` to one `createEazoCheckoutRoute`.
 
-### `resolveCart({ lines })`
+## `resolveCart({ lines, data })`
 
-Receives the browser's `{ id, quantity }` lines (plus optional string `data`
-such as a coupon code) and returns `{ currency, items, discountAmount?,
-discountLabel?, metadata? }`, where each item is
-`{ name, unitAmount, quantity, metadata, entitlementKey? }`. Return `null` when
-any id is unknown or unavailable.
+Receives `{ id, quantity }` lines and optional string `data`, and returns
+`{ currency, items, discountAmount?, discountLabel?, metadata? }`. Each item is
+`{ name, unitAmount, quantity, metadata, entitlementKey? }`. Return `null` to
+reject the cart. Prices and discounts come from server-side data only.
 
-- Unlock items set `entitlementKey` and quantity 1; Eazo grants the entitlement
-  when paid, read it with `useEazoEntitlement(key)` / `EazoEntitlementGate`.
-- Discounts are the app's business: compute `discountAmount` here on the server
-  (for example from the app's own coupon table). Eazo only checks that it is
-  below the subtotal and that the charged total meets the currency minimum.
+## `fulfillCartPayment(payment, { user })`
 
-- `unitAmount` is integer minor units (cents for USD).
-- One cart uses one currency, has at most 100 lines, each quantity 1–999.
-- The cart total may not exceed USD 5,000 or its per-currency equivalent
-  (`getEazoCartMaximumAmount(currency)`).
-- Put the app's own item id in `metadata` so delivery can read it back from
-  `payment.line_items`.
-
-### `fulfillCartPayment(payment, { user })`
-
-Grants the consumable lines of `payment.line_items` (those without
-`entitlement_key`) to `user.id`. It must be idempotent by `payment.payment_id`:
-Eazo may call it from the success page and again from the sync route. Use
-`INSERT ... ON CONFLICT (payment_id) DO NOTHING RETURNING` and grant only when a
-row comes back, in one transaction. The in-memory version in this example is for
-demonstration only.
+Grants the lines of `payment.line_items` that have no `entitlement_key`. It runs
+only for paid payments and may run more than once, so dedupe on
+`payment.payment_id` (`INSERT ... ON CONFLICT (payment_id) DO NOTHING RETURNING`).
+The in-memory version here is for demonstration only.
 
 ## Rules
 
 - Never call `/api/open/payments/*` or Stripe from the app.
-- Never grant goods from the browser, from a Stripe redirect, or from
-  localStorage. Only `fulfillCartPayment` grants, and only for paid payments.
+- Grant only in `fulfillCartPayment` or through entitlements; never from the
+  browser, a Stripe redirect, or localStorage.

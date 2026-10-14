@@ -9,8 +9,8 @@ export type CartCheckoutButtonProps = {
   className?: string;
 };
 
-// Cart contents (lines) can live in React state or localStorage; payment state
-// never does. The button only starts checkout; delivery happens on the server.
+// Lines can live in React state or localStorage; payment state never does.
+// The button only starts checkout; granting happens on the server.
 export function CartCheckoutButton({ lines, children = "Checkout", className }: CartCheckoutButtonProps) {
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState("");

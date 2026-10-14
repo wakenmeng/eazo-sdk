@@ -2,14 +2,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildEazoCartCheckoutRequest } from "@eazo/sdk/payments/server";
-import { createEazoCartPaymentStatusRoute } from "@eazo/sdk/payments/next";
+import { createEazoPaymentStatusRoute } from "@eazo/sdk/payments/next";
 import {
   assertEazoCartCheckoutRequestContract,
   assertNoLegacyPaymentFlowSource,
   mockEazoCartPayment,
   mockEazoCartPaymentFromResolution,
 } from "@eazo/sdk/payments/testing";
-import { fulfillCartPayment, resolveCart, SHOP_ITEMS } from "./cart";
+import { fulfillCartPayment, resolveCart, CART_ITEMS } from "./cart";
 
 const TEST_USER = { id: "app_user_test", email: null, name: null, avatarUrl: null };
 const originalEnv = { ...process.env };
@@ -47,10 +47,10 @@ describe("Eazo cart checkout contract", () => {
   });
 
   function allItemLines() {
-    return Object.entries(SHOP_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
+    return Object.entries(CART_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
   }
 
-  it("prices every shop item on the server into a valid platform request", async () => {
+  it("prices every cart item on the server into a valid platform request", async () => {
     const cart = await resolveCart({ lines: allItemLines(), data: {} });
     expect(cart).not.toBeNull();
 
@@ -61,8 +61,8 @@ describe("Eazo cart checkout contract", () => {
       discountAmount: cart!.discountAmount,
       discountLabel: cart!.discountLabel,
       metadata: cart!.metadata,
-      successUrl: "https://app.example.com/payment/cart/success",
-      cancelUrl: "https://app.example.com/payment/cart/cancel",
+      successUrl: "https://app.example.com/payment/success",
+      cancelUrl: "https://app.example.com/payment/cancel",
     });
     assertEazoCartCheckoutRequestContract(request);
   });
@@ -71,28 +71,28 @@ describe("Eazo cart checkout contract", () => {
     await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
   });
 
-  it("fulfills a paid cart of every shop item and tolerates repeated delivery", async () => {
+  it("fulfills a paid cart of every item and tolerates repeated delivery", async () => {
     const cart = await resolveCart({ lines: allItemLines(), data: {} });
     const payment = mockEazoCartPaymentFromResolution(cart!);
     await fulfillCartPayment(payment, { user: TEST_USER });
     await fulfillCartPayment(payment, { user: TEST_USER });
-    // Add assertions on the app's own storage: consumables were granted once.
+    // Add assertions on the app's own storage: each line was granted once.
   });
 
   it("only fulfills cart payments that are paid", async () => {
     const fulfill = vi.fn();
-    const GET = createEazoCartPaymentStatusRoute({
+    const GET = createEazoPaymentStatusRoute({
       fulfill,
       getUser: () => ({ ok: true, user: TEST_USER }),
     });
 
     mockPlatformResponse(200, mockEazoCartPayment("pending"));
-    const pending = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_test_cart"));
+    const pending = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
     expect((await pending.json()).fulfilled).toBe(false);
     expect(fulfill).not.toHaveBeenCalled();
 
     mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
-    const paid = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_test_cart"));
+    const paid = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
     expect((await paid.json()).fulfilled).toBe(true);
     expect(fulfill).toHaveBeenCalledTimes(1);
   });

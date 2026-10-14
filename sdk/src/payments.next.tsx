@@ -25,7 +25,14 @@ import { requireAuth, type User } from "./server";
 type JsonBody = Record<string, unknown>;
 
 export type EazoCheckoutRouteOptions = {
-  getProduct: (productKey: string) => EazoPaymentProduct | null | undefined;
+  /** One-time / subscription checkout: body `{ productKey }`, priced from the catalog. */
+  getProduct?: (productKey: string) => EazoPaymentProduct | null | undefined;
+  /**
+   * Cart checkout: body `{ lines: [{ id, quantity }], data? }`. Turn the lines into
+   * priced items from the app's own server-side data; return null to reject the
+   * cart. Never trust prices sent from the browser.
+   */
+  resolveCart?: EazoResolveCart;
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
 };
 
@@ -135,6 +142,15 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
   return async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const bodyRecord = body && typeof body === "object" ? body as JsonBody : {};
+    if (bodyRecord.lines !== undefined) {
+      if (!options.resolveCart) {
+        return jsonResponse({ error: "Cart checkout is not enabled: pass resolveCart" }, { status: 400 });
+      }
+      return checkoutCart(request, bodyRecord, options.resolveCart, options.getUser);
+    }
+    if (!options.getProduct) {
+      return jsonResponse({ error: "Product checkout is not enabled: pass getProduct" }, { status: 400 });
+    }
     const productKey = firstBodyString(bodyRecord, ["productKey", "product_key", "key"]) || "premium";
     const product = options.getProduct(productKey);
 
@@ -182,6 +198,8 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
 
 export function createEazoPaymentStatusRoute(options: {
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
+  /** Cart payments only: grants consumables once the payment is paid (see EazoCartFulfill). */
+  fulfill?: EazoCartFulfill;
 } = {}) {
   return async function GET(request: Request) {
     const paymentId = firstSearchParam(
@@ -201,6 +219,9 @@ export function createEazoPaymentStatusRoute(options: {
 
     try {
       const status = await getEazoPaymentStatus(paymentId, { appUserId: authResult.user.id });
+      if (isCartPayment(status)) {
+        return fulfillCartStatus(status, authResult.user, options.fulfill);
+      }
       return jsonResponse(status as unknown as JsonBody);
     } catch (error) {
       if (error instanceof EazoPaymentApiError) {
@@ -364,29 +385,19 @@ export type EazoCartFulfill = (
   context: { user: User },
 ) => void | Promise<void>;
 
-export type EazoCartCheckoutRouteOptions = {
-  /**
-   * Turn the browser's `{ id, quantity }` lines into priced items using the app's
-   * own server-side data. Return null to reject the cart (unknown or unavailable
-   * item). Never trust prices sent from the browser.
-   */
-  resolveCart: (input: {
-    lines: EazoCartLine[];
-    /** Untrusted string values from startEazoCartCheckout({ data }), e.g. a coupon code. */
-    data: Record<string, string>;
-    user: User;
-    request: Request;
-  }) => EazoCartResolution | null | undefined | Promise<EazoCartResolution | null | undefined>;
-  getUser?: (request: Request) => ReturnType<typeof requireAuth>;
-  successPath?: string;
-  cancelPath?: string;
-};
+export type EazoResolveCart = (input: {
+  lines: EazoCartLine[];
+  /** Untrusted string values from startEazoCartCheckout({ data }), e.g. a coupon code. */
+  data: Record<string, string>;
+  user: User;
+  request: Request;
+}) => EazoCartResolution | null | undefined | Promise<EazoCartResolution | null | undefined>;
 
-export type EazoCartFulfillRouteOptions = {
+export type EazoCartSyncRouteOptions = {
   /**
-   * Grant what a paid cart bought. Called only for paid cart payments, and may be
+   * Grants what a paid cart bought. Called only for paid cart payments, and may be
    * called more than once for the same payment, so it must be idempotent by
-   * `payment.payment_id` (for example a unique key in the app's own table).
+   * `payment.payment_id`.
    */
   fulfill: EazoCartFulfill;
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
@@ -437,105 +448,77 @@ function parseCartData(body: JsonBody): Record<string, string> | null {
   return parsed;
 }
 
-export function createEazoCartCheckoutRoute(options: EazoCartCheckoutRouteOptions) {
-  const successPath = options.successPath || "/payment/cart/success";
-  const cancelPath = options.cancelPath || "/payment/cart/cancel";
+async function checkoutCart(
+  request: Request,
+  body: JsonBody,
+  resolveCart: EazoResolveCart,
+  getUser?: (request: Request) => ReturnType<typeof requireAuth>,
+) {
+  const lines = parseCartLines(body);
+  const data = parseCartData(body);
+  if (!data) {
+    return jsonResponse(
+      { error: `Invalid cart data: send at most ${CART_DATA_MAX_KEYS} string values` },
+      { status: 400 },
+    );
+  }
+  if (!lines) {
+    return jsonResponse(
+      { error: `Invalid cart: send lines as [{ id, quantity }] with 1-${EAZO_CART_MAX_LINE_ITEMS} entries` },
+      { status: 400 },
+    );
+  }
 
-  return async function POST(request: Request) {
-    const body = await request.json().catch(() => ({}));
-    const bodyRecord = body && typeof body === "object" ? body as JsonBody : {};
-    const lines = parseCartLines(bodyRecord);
-    const data = parseCartData(bodyRecord);
-    if (!data) {
-      return jsonResponse(
-        { error: `Invalid cart data: send at most ${CART_DATA_MAX_KEYS} string values` },
-        { status: 400 },
-      );
-    }
-    if (!lines) {
-      return jsonResponse(
-        { error: `Invalid cart: send lines as [{ id, quantity }] with 1-${EAZO_CART_MAX_LINE_ITEMS} entries` },
-        { status: 400 },
-      );
-    }
+  const authResult = getUser ? getUser(request) : requireAuth(request);
+  if (!authResult.ok) return authResult.response;
 
-    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
-    if (!authResult.ok) return authResult.response;
-
-    try {
-      const cart = await options.resolveCart({ lines, data, user: authResult.user, request });
-      if (!cart) {
-        return jsonResponse({ error: "Invalid cart" }, { status: 400 });
-      }
-      const origin = getRequestOrigin(request);
-      const checkout = await createEazoCartCheckoutSession({
-        appUserId: authResult.user.id,
-        currency: cart.currency,
-        items: cart.items,
-        discountAmount: cart.discountAmount,
-        discountLabel: cart.discountLabel,
-        metadata: cart.metadata,
-        successUrl: `${origin}${successPath}`,
-        cancelUrl: `${origin}${cancelPath}`,
-      });
-      return jsonResponse(checkout);
-    } catch (error) {
-      return platformErrorResponse(error, "Checkout failed");
+  try {
+    const cart = await resolveCart({ lines, data, user: authResult.user, request });
+    if (!cart) {
+      return jsonResponse({ error: "Invalid cart" }, { status: 400 });
     }
-  };
+    const origin = getRequestOrigin(request);
+    const checkout = await createEazoCartCheckoutSession({
+      appUserId: authResult.user.id,
+      currency: cart.currency,
+      items: cart.items,
+      discountAmount: cart.discountAmount,
+      discountLabel: cart.discountLabel,
+      metadata: cart.metadata,
+      successUrl: `${origin}/payment/success`,
+      cancelUrl: `${origin}/payment/cancel`,
+    });
+    return jsonResponse(checkout);
+  } catch (error) {
+    return platformErrorResponse(error, "Checkout failed");
+  }
 }
 
 function isCartPayment(payment: { mode?: string | null }): payment is EazoCartPayment {
   return payment.mode === EAZO_CART_PAYMENT_MODE;
 }
 
-export function createEazoCartPaymentStatusRoute(options: EazoCartFulfillRouteOptions) {
-  return async function GET(request: Request) {
-    const paymentId = firstSearchParam(
-      new URL(request.url).searchParams,
-      ["paymentId", "payment_id"],
+async function fulfillCartStatus(payment: EazoCartPayment, user: User, fulfill?: EazoCartFulfill) {
+  // Without fulfill the cart only holds unlock items, which Eazo grants itself.
+  if (!payment.paid || !fulfill) {
+    return jsonResponse({ ...payment, fulfilled: payment.paid } as unknown as JsonBody);
+  }
+  try {
+    await fulfill(payment, { user });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ...payment,
+        error: error instanceof Error ? error.message : "Fulfillment failed",
+        fulfilled: false,
+      } as unknown as JsonBody,
+      { status: 500 },
     );
-    if (!paymentId) {
-      return jsonResponse(
-        { error: "Missing paymentId", accepted: ["paymentId", "payment_id"] },
-        { status: 400 },
-      );
-    }
-
-    const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
-    if (!authResult.ok) return authResult.response;
-
-    let status;
-    try {
-      status = await getEazoPaymentStatus(paymentId, { appUserId: authResult.user.id });
-    } catch (error) {
-      return platformErrorResponse(error, "Payment status failed");
-    }
-    if (!isCartPayment(status)) {
-      return jsonResponse({ error: "Not a cart payment" }, { status: 400 });
-    }
-    if (!status.paid) {
-      return jsonResponse({ ...status, fulfilled: false } as unknown as JsonBody);
-    }
-
-    try {
-      await options.fulfill(status, { user: authResult.user });
-    } catch (error) {
-      return jsonResponse(
-        {
-          error: error instanceof Error ? error.message : "Fulfillment failed",
-          payment_id: status.payment_id,
-          paid: true,
-          fulfilled: false,
-        },
-        { status: 500 },
-      );
-    }
-    return jsonResponse({ ...status, fulfilled: true } as unknown as JsonBody);
-  };
+  }
+  return jsonResponse({ ...payment, fulfilled: true } as unknown as JsonBody);
 }
 
-export function createEazoCartSyncRoute(options: EazoCartFulfillRouteOptions) {
+export function createEazoCartSyncRoute(options: EazoCartSyncRouteOptions) {
   return async function POST(request: Request) {
     const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
     if (!authResult.ok) return authResult.response;

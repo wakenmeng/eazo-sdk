@@ -1136,7 +1136,7 @@ export async function startEazoCartCheckout(
     redirect?: EazoCheckoutRedirect;
   } = {},
 ) {
-  const endpoint = options.endpoint || "/api/payments/cart-checkout";
+  const endpoint = options.endpoint || "/api/payments/checkout";
   const redirect = options.redirect || ((checkoutUrl: string) => {
     window.location.assign(checkoutUrl);
   });

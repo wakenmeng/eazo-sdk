@@ -227,37 +227,34 @@ src/lib/eazo-payments/payment-contract.test.ts
 src/lib/eazo-payments/payment-ui-contract.test.tsx
 ```
 
-#### Cart checkout (multiple items, any quantity)
+#### Cart checkout
 
-For a shop where one checkout buys several items, each in any quantity, use the
-`cart-checkout` recipe (requires `@eazo/sdk` >= 0.23.0). Eazo collects the money
-and reports whether the payment is paid; the app owns its items, prices, and
-what it grants.
+One payment for several line items, or more than one of the same item
+(`cart-checkout` recipe, `@eazo/sdk` >= 0.23.0):
 
 ```bash
 ./node_modules/.bin/eazo-sdk payments init --recipe cart-checkout
 ```
 
-The app writes two functions in `src/lib/eazo-payments/cart.ts`:
+Eazo charges one Stripe Checkout for the lines the app priced (up to 100 lines,
+quantity 1–999, subtotal up to USD 5,000 via `getEazoCartMaximumAmount`),
+applies an optional app-computed discount, grants an entitlement for each line
+with `entitlementKey`, and reports whether the payment is paid. The app writes
+two functions in `lib/eazo-payments/cart.ts`:
 
-- `resolveCart({ lines })` prices the browser's `{ id, quantity }` lines from the
-  app's own server-side data and returns `{ currency, items }`, or `null` to
-  reject the cart. Up to 100 lines, quantity 1–999, and a cart total of at most
-  USD 5,000 (`getEazoCartMaximumAmount(currency)`).
-- `fulfillCartPayment(payment, { user })` grants the consumable lines of
-  `payment.line_items` to the user. It runs only for paid cart payments and must
-  be idempotent by `payment.payment_id`.
+- `resolveCart({ lines, data })` prices the browser's `{ id, quantity }` lines on
+  the server and returns `{ currency, items, discountAmount?, discountLabel? }`,
+  or `null` to reject the cart.
+- `fulfillCartPayment(payment, { user })` grants the lines without
+  `entitlement_key`. It runs only for paid payments and must be idempotent by
+  `payment.payment_id`.
 
-Unlock items (owned forever) set `entitlementKey` with quantity 1; Eazo grants
-the entitlement itself, so read it with `useEazoEntitlement(key)`. A cart may mix
-unlock items and consumables. `resolveCart` may also return `discountAmount` and
-`discountLabel`, computed on the server from the app's own rules (for example a
-coupon code passed through `startEazoCartCheckout(lines, { data })`).
-
-The browser starts checkout with `startEazoCartCheckout(lines)` (or the
-scaffolded `CartCheckoutButton`). Delivery runs on the server from the success
-page and from `CartPaymentSync` mounted in the root layout, which also delivers
-carts the buyer never returned from. See
+It uses the same routes as the other recipes: `createEazoCheckoutRoute({
+resolveCart })` (with `getProduct` too if the app also sells catalog products),
+`createEazoPaymentStatusRoute({ fulfill })`, `/payment/success` and
+`/payment/cancel`, plus `createEazoCartSyncRoute({ fulfill })` at
+`/api/payments/sync` with `CartPaymentSync` in the root layout. The browser
+starts checkout with `startEazoCartCheckout(lines, { data })`. See
 `examples/payments/cart-checkout`.
 
 UI code should place the scaffolded component so checkout, login, status

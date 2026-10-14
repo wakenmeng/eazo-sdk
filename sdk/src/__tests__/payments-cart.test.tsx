@@ -19,11 +19,11 @@ import {
   listEazoCartPayments,
 } from "../payments.server";
 import {
-  createEazoCartCheckoutRoute,
-  createEazoCartPaymentStatusRoute,
+  createEazoCheckoutRoute,
+  createEazoPaymentStatusRoute,
   createEazoCartSyncRoute,
 } from "../payments.next";
-import { EazoCartPaymentSuccessPage } from "../payments.next.client";
+import { EazoPaymentSuccessPage } from "../payments.next.client";
 import {
   assertEazoCartCheckoutRequestContract,
   assertLocalCartCheckoutBodyContract,
@@ -162,8 +162,8 @@ describe("Eazo cart checkout SDK", () => {
       currency: "usd",
       items: ITEMS,
       metadata: { order_id: "order_9" },
-      successUrl: "https://app.example.com/payment/cart/success",
-      cancelUrl: "https://app.example.com/payment/cart/cancel",
+      successUrl: "https://app.example.com/payment/success",
+      cancelUrl: "https://app.example.com/payment/cancel",
       idempotencyKey: "cart-once",
     });
 
@@ -177,8 +177,8 @@ describe("Eazo cart checkout SDK", () => {
         { name: "100 Gems", unit_amount: 199, quantity: 2, metadata: { item_id: "gem_100" } },
         { name: "Red Skin", unit_amount: 499, quantity: 1, metadata: {} },
       ],
-      success_url: "https://app.example.com/payment/cart/success",
-      cancel_url: "https://app.example.com/payment/cart/cancel",
+      success_url: "https://app.example.com/payment/success",
+      cancel_url: "https://app.example.com/payment/cancel",
       metadata: { order_id: "order_9" },
       idempotency_key: "cart-once",
     });
@@ -259,7 +259,7 @@ describe("Eazo cart checkout SDK", () => {
     await startEazoCartCheckout([{ id: "gem_100", quantity: 2 }], { redirect, data: { couponCode: "NEW3" } });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0];
-    expect(url).toBe("/api/payments/cart-checkout");
+    expect(url).toBe("/api/payments/checkout");
     const body = JSON.parse(String(init?.body));
     assertLocalCartCheckoutBodyContract(body);
     expect(body).toEqual({ lines: [{ id: "gem_100", quantity: 2 }], data: { couponCode: "NEW3" } });
@@ -278,9 +278,9 @@ describe("Eazo cart checkout SDK", () => {
       })),
       ...(data.couponCode === "NEW3" ? { discountAmount: 100, discountLabel: "New user" } : {}),
     }));
-    const POST = createEazoCartCheckoutRoute({ resolveCart, getUser });
+    const POST = createEazoCheckoutRoute({ resolveCart, getUser });
 
-    const response = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
+    const response = await POST(new Request("https://app.example.com/api/payments/checkout", {
       method: "POST",
       body: JSON.stringify({ lines: [{ id: "gem_100", quantity: 3 }], data: { couponCode: "NEW3" } }),
     }));
@@ -295,27 +295,27 @@ describe("Eazo cart checkout SDK", () => {
     assertEazoCartCheckoutRequestContract(body);
     expect(body.items).toEqual([{ name: "gem_100", unit_amount: 300, quantity: 3, metadata: {} }]);
     expect(body).toMatchObject({ discount_amount: 100, discount_label: "New user" });
-    expect(body.success_url).toBe("https://app.example.com/payment/cart/success");
-    expect(body.cancel_url).toBe("https://app.example.com/payment/cart/cancel");
+    expect(body.success_url).toBe("https://app.example.com/payment/success");
+    expect(body.cancel_url).toBe("https://app.example.com/payment/cancel");
   });
 
   it("rejects malformed lines and carts resolveCart refuses", async () => {
     global.fetch = vi.fn() as unknown as typeof fetch;
-    const POST = createEazoCartCheckoutRoute({ resolveCart: () => null, getUser });
+    const POST = createEazoCheckoutRoute({ resolveCart: () => null, getUser });
 
-    const badData = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
+    const badData = await POST(new Request("https://app.example.com/api/payments/checkout", {
       method: "POST",
       body: JSON.stringify({ lines: [{ id: "a", quantity: 1 }], data: { discountAmount: 500 } }),
     }));
     expect(badData.status).toBe(400);
     for (const lines of [undefined, [], [{ id: "", quantity: 1 }], [{ id: "a", quantity: 0 }], [{ id: "a", quantity: 1.5 }]]) {
-      const response = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
+      const response = await POST(new Request("https://app.example.com/api/payments/checkout", {
         method: "POST",
         body: JSON.stringify({ lines }),
       }));
       expect(response.status).toBe(400);
     }
-    const refused = await POST(new Request("https://app.example.com/api/payments/cart-checkout", {
+    const refused = await POST(new Request("https://app.example.com/api/payments/checkout", {
       method: "POST",
       body: JSON.stringify({ lines: [{ id: "unknown", quantity: 1 }] }),
     }));
@@ -326,8 +326,8 @@ describe("Eazo cart checkout SDK", () => {
 
   it("fulfills only paid cart payments from the status route", async () => {
     const fulfill = vi.fn();
-    const GET = createEazoCartPaymentStatusRoute({ fulfill, getUser });
-    const request = () => new Request("https://app.example.com/api/payments/cart-status?payment_id=cap_test_cart");
+    const GET = createEazoPaymentStatusRoute({ fulfill, getUser });
+    const request = () => new Request("https://app.example.com/api/payments/status?payment_id=cap_test_cart");
 
     mockPlatformResponse(200, mockEazoCartPayment("processing"));
     expect(await (await GET(request())).json()).toMatchObject({ paid: false, fulfilled: false });
@@ -344,7 +344,7 @@ describe("Eazo cart checkout SDK", () => {
   });
 
   it("reports paid-but-undelivered carts when fulfill fails", async () => {
-    const GET = createEazoCartPaymentStatusRoute({
+    const GET = createEazoPaymentStatusRoute({
       fulfill: () => {
         throw new Error("inventory service down");
       },
@@ -352,26 +352,67 @@ describe("Eazo cart checkout SDK", () => {
     });
     mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
 
-    const response = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_test_cart"));
+    const response = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: "inventory service down",
       payment_id: "cap_test_cart",
+      mode: "cart",
       paid: true,
       fulfilled: false,
     });
   });
 
-  it("refuses non-cart payments on the cart status route", async () => {
+  it("passes one-time payments through the shared status route without fulfilling", async () => {
     const fulfill = vi.fn();
-    const GET = createEazoCartPaymentStatusRoute({ fulfill, getUser });
+    const GET = createEazoPaymentStatusRoute({ fulfill, getUser });
     mockPlatformResponse(200, { ...mockEazoCartPayment("succeeded"), mode: "one_time" });
 
-    const response = await GET(new Request("https://app.example.com/api/payments/cart-status?paymentId=cap_1"));
+    const response = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_1"));
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty("fulfilled");
     expect(fulfill).not.toHaveBeenCalled();
+  });
+
+  it("reports a paid entitlement-only cart as fulfilled when no fulfill is configured", async () => {
+    const GET = createEazoPaymentStatusRoute({ getUser });
+    mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
+
+    const response = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
+
+    expect(await response.json()).toMatchObject({ paid: true, fulfilled: true });
+  });
+
+  it("serves product and cart checkout from one route", async () => {
+    const POST = createEazoCheckoutRoute({
+      getUser,
+      getProduct: () => ({ key: "premium", name: "Premium unlock", unitAmount: 499, currency: "usd" }),
+      resolveCart: () => ({ currency: "usd", items: [{ name: "A", unitAmount: 300 }] }),
+    });
+
+    mockPlatformResponse(200, mockEazoCheckoutResponse());
+    await POST(new Request("https://app.example.com/api/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ productKey: "premium" }),
+    }));
+    expect(lastRequestBody()).toMatchObject({ product_key: "premium", mode: "one_time" });
+
+    mockPlatformResponse(200, mockEazoCheckoutResponse());
+    await POST(new Request("https://app.example.com/api/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ lines: [{ id: "a", quantity: 1 }] }),
+    }));
+    expect(lastRequestBody()).toMatchObject({ mode: "cart" });
+
+    const productOnly = createEazoCheckoutRoute({ getUser, getProduct: () => null });
+    const refused = await productOnly(new Request("https://app.example.com/api/payments/checkout", {
+      method: "POST",
+      body: JSON.stringify({ lines: [{ id: "a", quantity: 1 }] }),
+    }));
+    expect(refused.status).toBe(400);
+    expect((await refused.json()).error).toContain("resolveCart");
   });
 
   it("syncs every paid cart payment across pages", async () => {
@@ -382,7 +423,7 @@ describe("Eazo cart checkout SDK", () => {
       { items: [mockEazoCartPayment("succeeded", { payment_id: "cap_2" })], has_more: false, limit: 100, offset: 100 },
     );
 
-    const response = await POST(new Request("https://app.example.com/api/payments/cart-sync", { method: "POST" }));
+    const response = await POST(new Request("https://app.example.com/api/payments/sync", { method: "POST" }));
 
     expect(await response.json()).toEqual({ fulfilled: 2 });
     expect(fulfill.mock.calls.map(([payment]) => payment.payment_id)).toEqual(["cap_1", "cap_2"]);
@@ -392,24 +433,24 @@ describe("Eazo cart checkout SDK", () => {
 
   it("shows a delivered state once the cart status route fulfills the payment", async () => {
     vi.spyOn(auth, "getSessionHeader").mockResolvedValue("session_test");
-    window.history.pushState({}, "", "/payment/cart/success?payment_id=cap_test_cart");
+    window.history.pushState({}, "", "/payment/success?payment_id=cap_test_cart");
     mockPlatformResponse(200, { ...mockEazoCartPayment("succeeded"), fulfilled: true });
 
-    render(<EazoCartPaymentSuccessPage />);
+    render(<EazoPaymentSuccessPage />);
 
     await waitFor(() => expect(screen.getByText("Purchase complete")).toBeTruthy());
     const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
-    expect(urls[0]).toBe("/api/payments/cart-status?paymentId=cap_test_cart");
+    expect(urls[0]).toBe("/api/payments/status?paymentId=cap_test_cart");
     // The cart's unlock line refreshes its entitlement so gates update.
     expect(urls.some((url) => url.startsWith("/api/payments/entitlements?") && url.includes("skin_red"))).toBe(true);
   });
 
   it("tells the buyer delivery is pending when payment succeeded but fulfill failed", async () => {
     vi.spyOn(auth, "getSessionHeader").mockResolvedValue("session_test");
-    window.history.pushState({}, "", "/payment/cart/success?payment_id=cap_test_cart");
+    window.history.pushState({}, "", "/payment/success?payment_id=cap_test_cart");
     mockPlatformResponse(500, { error: "down", payment_id: "cap_test_cart", paid: true, fulfilled: false });
 
-    render(<EazoCartPaymentSuccessPage />);
+    render(<EazoPaymentSuccessPage />);
 
     await waitFor(() => expect(screen.getByText("Payment received")).toBeTruthy());
   });
@@ -431,7 +472,7 @@ describe("Eazo cart checkout SDK", () => {
     expect(detectPaymentsSourceRoot(cwd)).toBe("");
 
     const cart = scaffoldPayments({ cwd, recipe: "cart-checkout" });
-    expect(cart.files).toContain("app/api/payments/cart-checkout/route.ts");
+    expect(cart.files).toContain("app/api/payments/checkout/route.ts");
     expect(cart.files).toContain("lib/eazo-payments/cart.ts");
     expect(cart.files.some((file) => file.startsWith("src/"))).toBe(false);
     expect(fs.existsSync(path.join(cwd, "src"))).toBe(false);
@@ -439,8 +480,29 @@ describe("Eazo cart checkout SDK", () => {
     expect(contractTest).toContain('["app", "lib", "components"]');
     expect(contractTest).not.toContain('path.resolve(process.cwd(), "src")');
 
-    const oneTime = scaffoldPayments({ cwd, recipe: "one-time-unlock" });
+    const oneTimeCwd = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-root-app-one-time-"));
+    fs.mkdirSync(path.join(oneTimeCwd, "app"));
+    const oneTime = scaffoldPayments({ cwd: oneTimeCwd, recipe: "one-time-unlock" });
     expect(oneTime.files).toContain("app/api/payments/checkout/route.ts");
+  });
+
+  it("keeps shared payment routes of an existing integration and says what to add", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-existing-"));
+    scaffoldPayments({ cwd, recipe: "one-time-unlock" });
+    const checkoutBefore = fs.readFileSync(path.join(cwd, "src/app/api/payments/checkout/route.ts"), "utf8");
+
+    const cart = scaffoldPayments({ cwd, recipe: "cart-checkout" });
+
+    expect(cart.kept.map((file) => file.filePath)).toEqual([
+      "src/app/api/payments/checkout/route.ts",
+      "src/app/api/payments/status/route.ts",
+      "src/app/payment/success/page.tsx",
+      "src/app/payment/cancel/page.tsx",
+    ]);
+    expect(cart.kept[0].hint).toContain("resolveCart");
+    expect(cart.kept[1].hint).toContain("fulfill: fulfillCartPayment");
+    expect(cart.files).toContain("src/app/api/payments/sync/route.ts");
+    expect(fs.readFileSync(path.join(cwd, "src/app/api/payments/checkout/route.ts"), "utf8")).toBe(checkoutBefore);
   });
 
   it("keeps src/ when the project uses src/app or has no app directory yet", () => {
@@ -461,16 +523,18 @@ describe("Eazo cart checkout SDK", () => {
       "src/lib/eazo-payments/cart-contract.test.ts",
       "src/components/eazo-payments/CartCheckoutButton.tsx",
       "src/components/eazo-payments/CartPaymentSync.tsx",
-      "src/app/api/payments/cart-checkout/route.ts",
-      "src/app/api/payments/cart-status/route.ts",
-      "src/app/api/payments/cart-sync/route.ts",
-      "src/app/payment/cart/success/page.tsx",
-      "src/app/payment/cart/cancel/page.tsx",
+      "src/app/api/payments/checkout/route.ts",
+      "src/app/api/payments/status/route.ts",
+      "src/app/api/payments/sync/route.ts",
+      "src/app/payment/success/page.tsx",
+      "src/app/payment/cancel/page.tsx",
     ]);
+    expect(fs.readFileSync(path.join(cwd, "src/app/api/payments/checkout/route.ts"), "utf8"))
+      .toContain("createEazoCheckoutRoute({ resolveCart })");
     const cart = fs.readFileSync(path.join(cwd, "src/lib/eazo-payments/cart.ts"), "utf8");
     expect(cart).toContain("export async function resolveCart");
     expect(cart).toContain("Implement fulfillCartPayment");
-    expect(cart).toContain("entitlementKey: \"skin_red\"");
+    expect(cart).toContain("entitlementKey: \"item_a\"");
     expect(cart).toContain("ON CONFLICT (payment_id) DO NOTHING");
     expect(cart).not.toContain("productKey");
     for (const file of result.files) {

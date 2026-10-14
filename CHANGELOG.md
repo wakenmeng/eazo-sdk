@@ -9,29 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Cart checkout for generated apps.** One checkout can now buy several items,
-  each in any quantity; what is sold and how it is delivered stays in the app. New APIs: `createEazoCartCheckoutSession`,
-  `buildEazoCartCheckoutRequest`, `listEazoCartPayments`
-  (`@eazo/sdk/payments/server`); `createEazoCartCheckoutRoute`,
-  `createEazoCartPaymentStatusRoute`, `createEazoCartSyncRoute`
-  (`@eazo/sdk/payments/next`); `EazoCartPaymentSuccessPage`,
-  `EazoCartPaymentSync` (`@eazo/sdk/payments/next/client`);
-  `startEazoCartCheckout`, `assertEazoCartItems`, `getEazoCartMaximumAmount`
-  and `EAZO_CART_*` constants (`@eazo/sdk/payments`); cart mocks and contract
-  assertions (`@eazo/sdk/payments/testing`). Cart totals are capped at USD 5,000
-  (per-currency equivalents); one-time and subscription prices keep the USD 700
-  cap. Requires the Creator `mode=cart` checkout API.
-- Cart unlock items: `EazoCartItem.entitlementKey` (quantity 1) makes Eazo grant
-  that entitlement when the cart is paid; the cart success page refreshes it.
-- Cart discounts: `resolveCart` may return `discountAmount` / `discountLabel`
-  computed by the app (e.g. from its own coupons); Eazo shows it on Checkout and
-  charges the discounted total. `startEazoCartCheckout(lines, { data })` passes
-  string values such as a coupon code to `resolveCart`.
-- `mockEazoCartPaymentFromResolution` testing helper.
+- **Cart checkout for generated apps.** One payment can cover several line
+  items, each in any quantity. `createEazoCheckoutRoute` accepts `resolveCart`
+  (body `{ lines, data }`) alongside `getProduct`; `createEazoPaymentStatusRoute`
+  accepts `fulfill` for paid cart payments; `EazoPaymentSuccessPage` handles
+  cart payments. New: `createEazoCartSyncRoute` and `EazoCartPaymentSync`
+  (`/api/payments/sync`), `createEazoCartCheckoutSession`,
+  `buildEazoCartCheckoutRequest`, `listEazoCartPayments`,
+  `startEazoCartCheckout`, `assertEazoCartItems`, `getEazoCartMaximumAmount`,
+  `EAZO_CART_*` constants, and cart testing helpers. Lines with
+  `entitlementKey` (quantity 1) become entitlements; `discountAmount` /
+  `discountLabel` carry an app-computed discount. Cart subtotals are capped at
+  USD 5,000 (per-currency equivalents); one-time and subscription prices keep
+  the USD 700 cap. Requires the Creator `mode=cart` checkout API.
+- `eazo-sdk payments init --recipe cart-checkout` scaffold (keeps existing
+  shared routes and prints the edit to make) and the
+  `examples/payments/cart-checkout` reference app.
 - `eazo-sdk payments init` scaffolds into a root `app/` directory (and
   `lib/`, `components/`) when the project has no `src/app`, for every recipe.
-- `eazo-sdk payments init --recipe cart-checkout` scaffold and the
-  `examples/payments/cart-checkout` reference app.
 
 ### Changed
 
