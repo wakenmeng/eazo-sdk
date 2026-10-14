@@ -1,22 +1,22 @@
 import {
-  EAZO_CART_MAX_LINE_ITEMS,
-  EAZO_CART_MAX_QUANTITY,
-  EAZO_CART_PAYMENT_MODE,
+  assertEazoCheckoutItems,
+  EAZO_ITEMS_MAX_LINES,
+  EAZO_ITEMS_MAX_QUANTITY,
   EazoPaymentApiError,
-  type EazoCartItem,
-  type EazoCartLine,
-  type EazoCartPayment,
+  type EazoCheckoutItem,
+  type EazoCheckoutLine,
+  type EazoItemsPayment,
   type EazoPaymentCurrency,
   type EazoPaymentMetadata,
   type EazoPaymentProduct,
 } from "./payments";
 import {
   cancelEazoSubscription,
-  createEazoCartCheckoutSession,
+  createEazoItemsCheckoutSession,
   createEazoCheckoutSession,
   getEazoEntitlementStatus,
   getEazoPaymentStatus,
-  listEazoCartPayments,
+  listEazoItemsPayments,
   listEazoSubscriptions,
   resumeEazoSubscription,
 } from "./payments.server";
@@ -28,11 +28,11 @@ export type EazoCheckoutRouteOptions = {
   /** One-time / subscription checkout: body `{ productKey }`, priced from the catalog. */
   getProduct?: (productKey: string) => EazoPaymentProduct | null | undefined;
   /**
-   * Cart checkout: body `{ lines: [{ id, quantity }], data? }`. Turn the lines into
+   * Several items: body `{ lines: [{ id, quantity }], data? }`. Turn the lines into
    * priced items from the app's own server-side data; return null to reject the
-   * cart. Never trust prices sent from the browser.
+   * request. Never trust prices sent from the browser.
    */
-  resolveCart?: EazoResolveCart;
+  resolveItems?: EazoResolveItems;
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
 };
 
@@ -143,10 +143,10 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
     const body = await request.json().catch(() => ({}));
     const bodyRecord = body && typeof body === "object" ? body as JsonBody : {};
     if (bodyRecord.lines !== undefined) {
-      if (!options.resolveCart) {
-        return jsonResponse({ error: "Cart checkout is not enabled: pass resolveCart" }, { status: 400 });
+      if (!options.resolveItems) {
+        return jsonResponse({ error: "Checkout with items is not enabled: pass resolveItems" }, { status: 400 });
       }
-      return checkoutCart(request, bodyRecord, options.resolveCart, options.getUser);
+      return checkoutItems(request, bodyRecord, options.resolveItems, options.getUser);
     }
     if (!options.getProduct) {
       return jsonResponse({ error: "Product checkout is not enabled: pass getProduct" }, { status: 400 });
@@ -198,8 +198,8 @@ export function createEazoCheckoutRoute(options: EazoCheckoutRouteOptions) {
 
 export function createEazoPaymentStatusRoute(options: {
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
-  /** Cart payments only: grants consumables once the payment is paid (see EazoCartFulfill). */
-  fulfill?: EazoCartFulfill;
+  /** Payments with line items only: grants lines without entitlement_key once the payment is paid. */
+  fulfill?: EazoItemsFulfill;
 } = {}) {
   return async function GET(request: Request) {
     const paymentId = firstSearchParam(
@@ -219,8 +219,8 @@ export function createEazoPaymentStatusRoute(options: {
 
     try {
       const status = await getEazoPaymentStatus(paymentId, { appUserId: authResult.user.id });
-      if (isCartPayment(status)) {
-        return fulfillCartStatus(status, authResult.user, options.fulfill);
+      if (isItemsPayment(status)) {
+        return fulfillItemsStatus(status, authResult.user, options.fulfill);
       }
       return jsonResponse(status as unknown as JsonBody);
     } catch (error) {
@@ -363,15 +363,16 @@ export function createEazoResumeSubscriptionRoute(options: {
   };
 }
 
-const CART_LINE_ID_MAX_LENGTH = 128;
-const CART_DATA_MAX_KEYS = 20;
-const CART_DATA_VALUE_MAX_LENGTH = 500;
-const CART_SYNC_PAGE_SIZE = 100;
-const CART_SYNC_MAX_PAGES = 10;
+const ITEM_LINE_ID_MAX_LENGTH = 128;
+const CHECKOUT_DATA_MAX_KEYS = 20;
+const CHECKOUT_DATA_VALUE_MAX_LENGTH = 500;
+const SYNC_PAGE_SIZE = 100;
+const SYNC_MAX_PAGES = 50;
+const SYNC_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
-export type EazoCartResolution = {
+export type EazoItemsResolution = {
   currency: EazoPaymentCurrency;
-  items: EazoCartItem[];
+  items: EazoCheckoutItem[];
   /** Amount off the subtotal, computed here on the server (e.g. from the app's own coupon). */
   discountAmount?: number;
   /** Shown next to the discount on the Stripe checkout page. */
@@ -380,26 +381,26 @@ export type EazoCartResolution = {
   metadata?: EazoPaymentMetadata;
 };
 
-export type EazoCartFulfill = (
-  payment: EazoCartPayment,
+export type EazoItemsFulfill = (
+  payment: EazoItemsPayment,
   context: { user: User },
 ) => void | Promise<void>;
 
-export type EazoResolveCart = (input: {
-  lines: EazoCartLine[];
-  /** Untrusted string values from startEazoCartCheckout({ data }), e.g. a coupon code. */
+export type EazoResolveItems = (input: {
+  lines: EazoCheckoutLine[];
+  /** Untrusted string values from startEazoItemsCheckout({ data }), e.g. a coupon code. */
   data: Record<string, string>;
   user: User;
   request: Request;
-}) => EazoCartResolution | null | undefined | Promise<EazoCartResolution | null | undefined>;
+}) => EazoItemsResolution | null | undefined | Promise<EazoItemsResolution | null | undefined>;
 
-export type EazoCartSyncRouteOptions = {
+export type EazoPaymentSyncRouteOptions = {
   /**
-   * Grants what a paid cart bought. Called only for paid cart payments, and may be
+   * Grants what a paid payment bought. Called only for paid payments with line items, and may be
    * called more than once for the same payment, so it must be idempotent by
    * `payment.payment_id`.
    */
-  fulfill: EazoCartFulfill;
+  fulfill: EazoItemsFulfill;
   getUser?: (request: Request) => ReturnType<typeof requireAuth>;
 };
 
@@ -416,17 +417,17 @@ function platformErrorResponse(error: unknown, fallbackMessage: string) {
   );
 }
 
-function parseCartLines(body: JsonBody): EazoCartLine[] | null {
+function parseItemLines(body: JsonBody): EazoCheckoutLine[] | null {
   const lines = body.lines;
-  if (!Array.isArray(lines) || lines.length === 0 || lines.length > EAZO_CART_MAX_LINE_ITEMS) {
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > EAZO_ITEMS_MAX_LINES) {
     return null;
   }
-  const parsed: EazoCartLine[] = [];
+  const parsed: EazoCheckoutLine[] = [];
   for (const line of lines) {
     if (!line || typeof line !== "object") return null;
     const { id, quantity } = line as Record<string, unknown>;
-    if (typeof id !== "string" || id.length === 0 || id.length > CART_LINE_ID_MAX_LENGTH) return null;
-    if (!Number.isInteger(quantity) || (quantity as number) < 1 || (quantity as number) > EAZO_CART_MAX_QUANTITY) {
+    if (typeof id !== "string" || id.length === 0 || id.length > ITEM_LINE_ID_MAX_LENGTH) return null;
+    if (!Number.isInteger(quantity) || (quantity as number) < 1 || (quantity as number) > EAZO_ITEMS_MAX_QUANTITY) {
       return null;
     }
     parsed.push({ id, quantity: quantity as number });
@@ -434,37 +435,37 @@ function parseCartLines(body: JsonBody): EazoCartLine[] | null {
   return parsed;
 }
 
-function parseCartData(body: JsonBody): Record<string, string> | null {
+function parseCheckoutData(body: JsonBody): Record<string, string> | null {
   const data = body.data;
   if (data === undefined) return {};
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
   const entries = Object.entries(data as Record<string, unknown>);
-  if (entries.length > CART_DATA_MAX_KEYS) return null;
+  if (entries.length > CHECKOUT_DATA_MAX_KEYS) return null;
   const parsed: Record<string, string> = {};
   for (const [key, value] of entries) {
-    if (typeof value !== "string" || value.length > CART_DATA_VALUE_MAX_LENGTH) return null;
+    if (typeof value !== "string" || value.length > CHECKOUT_DATA_VALUE_MAX_LENGTH) return null;
     parsed[key] = value;
   }
   return parsed;
 }
 
-async function checkoutCart(
+async function checkoutItems(
   request: Request,
   body: JsonBody,
-  resolveCart: EazoResolveCart,
+  resolveItems: EazoResolveItems,
   getUser?: (request: Request) => ReturnType<typeof requireAuth>,
 ) {
-  const lines = parseCartLines(body);
-  const data = parseCartData(body);
+  const lines = parseItemLines(body);
+  const data = parseCheckoutData(body);
   if (!data) {
     return jsonResponse(
-      { error: `Invalid cart data: send at most ${CART_DATA_MAX_KEYS} string values` },
+      { error: `Invalid checkout data: send at most ${CHECKOUT_DATA_MAX_KEYS} string values` },
       { status: 400 },
     );
   }
   if (!lines) {
     return jsonResponse(
-      { error: `Invalid cart: send lines as [{ id, quantity }] with 1-${EAZO_CART_MAX_LINE_ITEMS} entries` },
+      { error: `Invalid items: send lines as [{ id, quantity }] with 1-${EAZO_ITEMS_MAX_LINES} entries` },
       { status: 400 },
     );
   }
@@ -473,18 +474,23 @@ async function checkoutCart(
   if (!authResult.ok) return authResult.response;
 
   try {
-    const cart = await resolveCart({ lines, data, user: authResult.user, request });
-    if (!cart) {
-      return jsonResponse({ error: "Invalid cart" }, { status: 400 });
+    const resolved = await resolveItems({ lines, data, user: authResult.user, request });
+    if (!resolved) {
+      return jsonResponse({ error: "Invalid items" }, { status: 400 });
+    }
+    try {
+      assertEazoCheckoutItems(resolved.items, resolved.currency, { discountAmount: resolved.discountAmount });
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : "Invalid items" }, { status: 400 });
     }
     const origin = getRequestOrigin(request);
-    const checkout = await createEazoCartCheckoutSession({
+    const checkout = await createEazoItemsCheckoutSession({
       appUserId: authResult.user.id,
-      currency: cart.currency,
-      items: cart.items,
-      discountAmount: cart.discountAmount,
-      discountLabel: cart.discountLabel,
-      metadata: cart.metadata,
+      currency: resolved.currency,
+      items: resolved.items,
+      discountAmount: resolved.discountAmount,
+      discountLabel: resolved.discountLabel,
+      metadata: resolved.metadata,
       successUrl: `${origin}/payment/success`,
       cancelUrl: `${origin}/payment/cancel`,
     });
@@ -494,14 +500,18 @@ async function checkoutCart(
   }
 }
 
-function isCartPayment(payment: { mode?: string | null }): payment is EazoCartPayment {
-  return payment.mode === EAZO_CART_PAYMENT_MODE;
+function isItemsPayment(payment: { line_items?: unknown }): payment is EazoItemsPayment {
+  return Array.isArray(payment.line_items);
 }
 
-async function fulfillCartStatus(payment: EazoCartPayment, user: User, fulfill?: EazoCartFulfill) {
-  // Without fulfill the cart only holds unlock items, which Eazo grants itself.
-  if (!payment.paid || !fulfill) {
-    return jsonResponse({ ...payment, fulfilled: payment.paid } as unknown as JsonBody);
+async function fulfillItemsStatus(payment: EazoItemsPayment, user: User, fulfill?: EazoItemsFulfill) {
+  if (!payment.paid) {
+    return jsonResponse({ ...payment, fulfilled: false } as unknown as JsonBody);
+  }
+  if (!fulfill) {
+    // Entitlement lines are granted by Eazo; any other line needs the app's fulfill.
+    const fulfilled = (payment.line_items || []).every((line) => Boolean(line.entitlement_key));
+    return jsonResponse({ ...payment, fulfilled } as unknown as JsonBody);
   }
   try {
     await fulfill(payment, { user });
@@ -518,31 +528,41 @@ async function fulfillCartStatus(payment: EazoCartPayment, user: User, fulfill?:
   return jsonResponse({ ...payment, fulfilled: true } as unknown as JsonBody);
 }
 
-export function createEazoCartSyncRoute(options: EazoCartSyncRouteOptions) {
+export function createEazoPaymentSyncRoute(options: EazoPaymentSyncRouteOptions) {
   return async function POST(request: Request) {
     const authResult = options.getUser ? options.getUser(request) : requireAuth(request);
     if (!authResult.ok) return authResult.response;
 
-    let fulfilled = 0;
+    // Only recent payments can still be waiting to be granted; this bounds the
+    // replay on every app open. fulfill is idempotent, so replays are safe.
+    const updatedAfter = new Date(Date.now() - SYNC_WINDOW_MS);
+    let processed = 0;
+    let failed = 0;
     try {
-      for (let page = 0; page < CART_SYNC_MAX_PAGES; page += 1) {
-        const result = await listEazoCartPayments({
+      for (let page = 0; page < SYNC_MAX_PAGES; page += 1) {
+        const result = await listEazoItemsPayments({
           appUserId: authResult.user.id,
           status: "succeeded",
-          limit: CART_SYNC_PAGE_SIZE,
-          offset: page * CART_SYNC_PAGE_SIZE,
+          updatedAfter,
+          limit: SYNC_PAGE_SIZE,
+          offset: page * SYNC_PAGE_SIZE,
         });
         for (const payment of result.items) {
-          await options.fulfill(payment, { user: authResult.user });
-          fulfilled += 1;
+          try {
+            await options.fulfill(payment, { user: authResult.user });
+            processed += 1;
+          } catch {
+            // One bad payment must not block the rest; the next sync retries it.
+            failed += 1;
+          }
         }
         if (!result.has_more) break;
       }
     } catch (error) {
-      const response = platformErrorResponse(error, "Cart sync failed");
+      const response = platformErrorResponse(error, "Payment sync failed");
       const body = await response.json();
-      return jsonResponse({ ...body, fulfilled }, { status: response.status });
+      return jsonResponse({ ...body, processed, failed }, { status: response.status });
     }
-    return jsonResponse({ fulfilled });
+    return jsonResponse({ processed, failed });
   };
 }

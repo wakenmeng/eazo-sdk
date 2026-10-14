@@ -1,28 +1,29 @@
 import {
   EAZO_PAYMENT_CURRENCY,
-  type EazoCartItem,
-  type EazoCartLine,
+  type EazoCheckoutItem,
+  type EazoCheckoutLine,
 } from "@eazo/sdk/payments";
-import type { EazoCartFulfill, EazoCartResolution } from "@eazo/sdk/payments/next";
+import type { EazoItemsFulfill, EazoItemsResolution } from "@eazo/sdk/payments/next";
 
-export const CART_CURRENCY = EAZO_PAYMENT_CURRENCY.USD;
+export const PAYMENT_CURRENCY = EAZO_PAYMENT_CURRENCY.USD;
 
-// What can be paid for, keyed by the id the browser sends in cart lines. Replace
+// What can be paid for, keyed by the id the browser sends in lines. Replace
 // with the app's own server-side data. unitAmount is integer minor units.
 // entitlementKey: Eazo grants it when paid (quantity 1); read it with
-// useEazoEntitlement(key). Lines without it are granted by fulfillCartPayment.
-export const CART_ITEMS: Record<string, { name: string; unitAmount: number; entitlementKey?: string }> = {
+// useEazoEntitlement(key). Lines without it are granted by fulfillPayment.
+export const PAYMENT_ITEMS: Record<string, { name: string; unitAmount: number; entitlementKey?: string }> = {
   item_a: { name: "Item A", unitAmount: 499, entitlementKey: "item_a" },
   item_b: { name: "Item B", unitAmount: 199 },
 };
 
-// Prices the browser's lines on the server. Return null to reject the cart.
+// Prices the browser's lines on the server. Return null to reject the request.
 // Never trust prices or amounts from the browser; a discount, if any, is
 // computed here and returned as discountAmount / discountLabel.
-export async function resolveCart({ lines }: { lines: EazoCartLine[]; data?: Record<string, string> }): Promise<EazoCartResolution | null> {
-  const items: EazoCartItem[] = [];
+export async function resolveItems({ lines }: { lines: EazoCheckoutLine[]; data?: Record<string, string> }): Promise<EazoItemsResolution | null> {
+  if (new Set(lines.map((line) => line.id)).size !== lines.length) return null;
+  const items: EazoCheckoutItem[] = [];
   for (const line of lines) {
-    const item = CART_ITEMS[line.id];
+    const item = PAYMENT_ITEMS[line.id];
     if (!item) return null;
     if (item.entitlementKey && line.quantity !== 1) return null;
     items.push({
@@ -33,17 +34,14 @@ export async function resolveCart({ lines }: { lines: EazoCartLine[]; data?: Rec
       ...(item.entitlementKey ? { entitlementKey: item.entitlementKey } : {}),
     });
   }
-  return { currency: CART_CURRENCY, items };
+  return { currency: PAYMENT_CURRENCY, items };
 }
 
 // Grants the paid lines that have no entitlement_key to user.id. Called only for
-// paid cart payments, possibly more than once per payment. A real app does this
-// in ONE database transaction:
-//
-//   INSERT INTO cart_fulfillments (payment_id, user_id) VALUES ($1, $2)
-//     ON CONFLICT (payment_id) DO NOTHING RETURNING payment_id;
-//   -- no row returned: already granted, stop.
-//   -- row returned: grant each remaining line to user.id.
+// paid payments with line items, possibly more than once per payment. A real app
+// records the payment in a table whose primary key is payment_id, in the same
+// transaction as the grant (insert ... onConflictDoNothing ... returning; grant
+// only when a row was inserted).
 //
 // EXAMPLE ONLY: the in-memory Set/Map below stand in for those tables; they are
 // lost on restart and not shared between serverless instances.
@@ -54,7 +52,7 @@ export function getBalances(userId: string): Record<string, number> {
   return Object.fromEntries(balances.get(userId) ?? []);
 }
 
-export const fulfillCartPayment: EazoCartFulfill = async (payment, { user }) => {
+export const fulfillPayment: EazoItemsFulfill = async (payment, { user }) => {
   const lines = payment.line_items.filter((line) => !line.entitlement_key);
   if (lines.length === 0) return; // Entitlement lines are granted by Eazo.
   if (fulfilledPaymentIds.has(payment.payment_id)) return;

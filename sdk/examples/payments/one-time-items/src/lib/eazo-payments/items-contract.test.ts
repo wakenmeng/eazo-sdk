@@ -1,15 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildEazoCartCheckoutRequest } from "@eazo/sdk/payments/server";
+import { buildEazoItemsCheckoutRequest } from "@eazo/sdk/payments/server";
 import { createEazoPaymentStatusRoute } from "@eazo/sdk/payments/next";
 import {
-  assertEazoCartCheckoutRequestContract,
+  assertEazoItemsCheckoutRequestContract,
   assertNoLegacyPaymentFlowSource,
-  mockEazoCartPayment,
-  mockEazoCartPaymentFromResolution,
+  mockEazoItemsPayment,
+  mockEazoItemsPaymentFromResolution,
 } from "@eazo/sdk/payments/testing";
-import { fulfillCartPayment, resolveCart, CART_ITEMS } from "./cart";
+import { fulfillPayment, resolveItems, PAYMENT_ITEMS } from "./items";
 
 const TEST_USER = { id: "app_user_test", email: null, name: null, avatarUrl: null };
 const originalEnv = { ...process.env };
@@ -34,7 +34,7 @@ function listSourceFiles(dir: string): string[] {
   });
 }
 
-describe("Eazo cart checkout contract", () => {
+describe("Eazo items checkout contract", () => {
   beforeEach(() => {
     process.env.EAZO_API_BASE = "https://dev1.eazo.ai";
     process.env.EAZO_APP_ID = "app_test";
@@ -47,52 +47,52 @@ describe("Eazo cart checkout contract", () => {
   });
 
   function allItemLines() {
-    return Object.entries(CART_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
+    return Object.entries(PAYMENT_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
   }
 
-  it("prices every cart item on the server into a valid platform request", async () => {
-    const cart = await resolveCart({ lines: allItemLines(), data: {} });
-    expect(cart).not.toBeNull();
+  it("prices every item on the server into a valid platform request", async () => {
+    const resolved = await resolveItems({ lines: allItemLines(), data: {} });
+    expect(resolved).not.toBeNull();
 
-    const request = buildEazoCartCheckoutRequest({
+    const request = buildEazoItemsCheckoutRequest({
       appUserId: TEST_USER.id,
-      currency: cart!.currency,
-      items: cart!.items,
-      discountAmount: cart!.discountAmount,
-      discountLabel: cart!.discountLabel,
-      metadata: cart!.metadata,
+      currency: resolved!.currency,
+      items: resolved!.items,
+      discountAmount: resolved!.discountAmount,
+      discountLabel: resolved!.discountLabel,
+      metadata: resolved!.metadata,
       successUrl: "https://app.example.com/payment/success",
       cancelUrl: "https://app.example.com/payment/cancel",
     });
-    assertEazoCartCheckoutRequestContract(request);
+    assertEazoItemsCheckoutRequestContract(request);
   });
 
-  it("rejects carts with unknown items", async () => {
-    await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
+  it("rejects unknown items", async () => {
+    await expect(resolveItems({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
   });
 
-  it("fulfills a paid cart of every item and tolerates repeated delivery", async () => {
-    const cart = await resolveCart({ lines: allItemLines(), data: {} });
-    const payment = mockEazoCartPaymentFromResolution(cart!);
-    await fulfillCartPayment(payment, { user: TEST_USER });
-    await fulfillCartPayment(payment, { user: TEST_USER });
+  it("fulfills a paid payment of every item and tolerates repeated delivery", async () => {
+    const resolved = await resolveItems({ lines: allItemLines(), data: {} });
+    const payment = mockEazoItemsPaymentFromResolution(resolved!);
+    await fulfillPayment(payment, { user: TEST_USER });
+    await fulfillPayment(payment, { user: TEST_USER });
     // Add assertions on the app's own storage: each line was granted once.
   });
 
-  it("only fulfills cart payments that are paid", async () => {
+  it("only fulfills payments that are paid", async () => {
     const fulfill = vi.fn();
     const GET = createEazoPaymentStatusRoute({
       fulfill,
       getUser: () => ({ ok: true, user: TEST_USER }),
     });
 
-    mockPlatformResponse(200, mockEazoCartPayment("pending"));
-    const pending = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
+    mockPlatformResponse(200, mockEazoItemsPayment("pending"));
+    const pending = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_items"));
     expect((await pending.json()).fulfilled).toBe(false);
     expect(fulfill).not.toHaveBeenCalled();
 
-    mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
-    const paid = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
+    mockPlatformResponse(200, mockEazoItemsPayment("succeeded"));
+    const paid = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_items"));
     expect((await paid.json()).fulfilled).toBe(true);
     expect(fulfill).toHaveBeenCalledTimes(1);
   });

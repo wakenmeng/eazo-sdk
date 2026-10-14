@@ -1,5 +1,5 @@
 {
-  "name": "eazo-payments-cart-checkout-example",
+  "name": "eazo-payments-one-time-items-example",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@eazo/sdk": ">=0.23.0-cart.4",
+    "@eazo/sdk": ">=0.23.0-items.1",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

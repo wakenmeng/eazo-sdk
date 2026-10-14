@@ -1,8 +1,8 @@
 import type {
   CreateEazoCheckoutResult,
-  EazoCartCheckoutSessionRequest,
-  EazoCartItem,
-  EazoCartPayment,
+  EazoItemsCheckoutSessionRequest,
+  EazoCheckoutItem,
+  EazoItemsPayment,
   EazoAppSubscription,
   EazoAppSubscriptionsResponse,
   EazoCheckoutSessionRequest,
@@ -14,10 +14,10 @@ import type {
   EazoPaymentStatusValue,
 } from "./payments";
 import {
-  assertEazoCartItems,
+  assertEazoCheckoutItems,
   assertEazoPaymentUnitAmount,
-  EAZO_CART_PAYMENT_MODE,
   EAZO_PAYMENT_CURRENCY,
+  EAZO_PAYMENT_MODE,
   getEazoPaymentPriceLimits,
 } from "./payments";
 
@@ -48,24 +48,24 @@ export function mockEazoPaymentStatus(
   };
 }
 
-export function mockEazoCartPayment(
+export function mockEazoItemsPayment(
   status: EazoPaymentStatusValue,
-  overrides: Partial<EazoCartPayment> = {},
-): EazoCartPayment {
+  overrides: Partial<EazoItemsPayment> = {},
+): EazoItemsPayment {
   return {
-    payment_id: "cap_test_cart",
+    payment_id: "cap_test_items",
     app_id: "app_test",
     app_user_id: "app_user_test",
-    mode: EAZO_CART_PAYMENT_MODE,
+    mode: EAZO_PAYMENT_MODE.ONE_TIME,
     status,
     paid: status === "succeeded",
     amount_total: 897,
     currency: "usd",
-    product_name: "100 Gems ×2 + 1 more",
+    product_name: "Item B ×2 + 1 more",
     metadata: {},
     line_items: [
-      { name: "100 Gems", unit_amount: 199, quantity: 2, amount_subtotal: 398, metadata: { item_id: "gem_100" }, entitlement_key: null },
-      { name: "Red Skin", unit_amount: 499, quantity: 1, amount_subtotal: 499, metadata: { item_id: "skin_red" }, entitlement_key: "skin_red" },
+      { name: "Item B", unit_amount: 199, quantity: 2, amount_subtotal: 398, metadata: { item_id: "item_b" }, entitlement_key: null },
+      { name: "Item A", unit_amount: 499, quantity: 1, amount_subtotal: 499, metadata: { item_id: "item_a" }, entitlement_key: "item_a" },
     ],
     amount_subtotal: 897,
     discount_amount: null,
@@ -75,17 +75,17 @@ export function mockEazoCartPayment(
   };
 }
 
-/** A paid (by default) cart payment built from what the app's resolveCart returned. */
-export function mockEazoCartPaymentFromResolution(
+/** A paid (by default) payment with line items, built from what the app's resolveItems returned. */
+export function mockEazoItemsPaymentFromResolution(
   resolution: {
     currency: EazoPaymentCurrency;
-    items: EazoCartItem[];
+    items: EazoCheckoutItem[];
     discountAmount?: number;
     discountLabel?: string;
     metadata?: Record<string, string>;
   },
-  overrides: Partial<EazoCartPayment> = {},
-): EazoCartPayment {
+  overrides: Partial<EazoItemsPayment> = {},
+): EazoItemsPayment {
   const lineItems = resolution.items.map((item) => ({
     name: item.name,
     unit_amount: item.unitAmount,
@@ -96,7 +96,7 @@ export function mockEazoCartPaymentFromResolution(
   }));
   const subtotal = lineItems.reduce((sum, line) => sum + line.amount_subtotal, 0);
   const discount = resolution.discountAmount ?? 0;
-  return mockEazoCartPayment("succeeded", {
+  return mockEazoItemsPayment("succeeded", {
     currency: resolution.currency,
     line_items: lineItems,
     amount_subtotal: subtotal,
@@ -293,7 +293,7 @@ export function assertEazoCheckoutRequestContract(request: EazoCheckoutSessionRe
   }
 }
 
-export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutSessionRequest) {
+export function assertEazoItemsCheckoutRequestContract(request: EazoItemsCheckoutSessionRequest) {
   const body = request as unknown as Record<string, unknown>;
   assertExactKeys(
     body,
@@ -310,10 +310,10 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
       "metadata",
       "idempotency_key",
     ],
-    "Eazo cart checkout request",
+    "Eazo items checkout request",
   );
-  if (body.mode !== EAZO_CART_PAYMENT_MODE) {
-    throw new Error(`Eazo cart checkout request mode must be ${EAZO_CART_PAYMENT_MODE}`);
+  if (body.mode !== EAZO_PAYMENT_MODE.ONE_TIME) {
+    throw new Error(`Eazo items checkout request mode must be ${EAZO_PAYMENT_MODE.ONE_TIME}`);
   }
   assertString(body.app_id, "app_id");
   assertString(body.app_user_id, "app_user_id");
@@ -328,7 +328,7 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
     );
     assertMetadata(item.metadata, `items[${index}].metadata`);
   });
-  assertEazoCartItems(
+  assertEazoCheckoutItems(
     (body.items as Array<Record<string, unknown>>).map((item) => ({
       name: item.name as string,
       unitAmount: item.unit_amount as number,
@@ -344,9 +344,9 @@ export function assertEazoCartCheckoutRequestContract(request: EazoCartCheckoutS
   assertString(body.idempotency_key, "idempotency_key");
 }
 
-export function assertLocalCartCheckoutBodyContract(body: unknown) {
-  assertRecord(body, "local cart checkout body");
-  assertExactKeys(body, ["lines", ...(body.data === undefined ? [] : ["data"])], "local cart checkout body");
+export function assertLocalItemsCheckoutBodyContract(body: unknown) {
+  assertRecord(body, "local items checkout body");
+  assertExactKeys(body, ["lines", ...(body.data === undefined ? [] : ["data"])], "local items checkout body");
   if (!Array.isArray(body.lines)) throw new Error("lines must be an array");
   body.lines.forEach((line, index) => {
     assertRecord(line, `lines[${index}]`);

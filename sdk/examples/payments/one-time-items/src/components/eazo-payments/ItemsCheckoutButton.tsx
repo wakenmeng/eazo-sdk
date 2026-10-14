@@ -1,17 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { startEazoCartCheckout, type EazoCartLine } from "@eazo/sdk/payments";
+import { startEazoItemsCheckout, type EazoCheckoutLine } from "@eazo/sdk/payments";
 
-export type CartCheckoutButtonProps = {
-  lines: EazoCartLine[];
+export type ItemsCheckoutButtonProps = {
+  lines: EazoCheckoutLine[];
   children?: React.ReactNode;
   className?: string;
 };
 
 // Lines can live in React state or localStorage; payment state never does.
 // The button only starts checkout; granting happens on the server.
-export function CartCheckoutButton({ lines, children = "Checkout", className }: CartCheckoutButtonProps) {
+export function ItemsCheckoutButton({ lines, children = "Checkout", className }: ItemsCheckoutButtonProps) {
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -19,7 +19,7 @@ export function CartCheckoutButton({ lines, children = "Checkout", className }: 
     setStarting(true);
     setError("");
     try {
-      await startEazoCartCheckout(lines);
+      await startEazoItemsCheckout(lines);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");
       setStarting(false);

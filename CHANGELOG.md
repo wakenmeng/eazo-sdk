@@ -9,22 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Cart checkout for generated apps.** One payment can cover several line
-  items, each in any quantity. `createEazoCheckoutRoute` accepts `resolveCart`
-  (body `{ lines, data }`) alongside `getProduct`; `createEazoPaymentStatusRoute`
-  accepts `fulfill` for paid cart payments; `EazoPaymentSuccessPage` handles
-  cart payments. New: `createEazoCartSyncRoute` and `EazoCartPaymentSync`
-  (`/api/payments/sync`), `createEazoCartCheckoutSession`,
-  `buildEazoCartCheckoutRequest`, `listEazoCartPayments`,
-  `startEazoCartCheckout`, `assertEazoCartItems`, `getEazoCartMaximumAmount`,
-  `EAZO_CART_*` constants, and cart testing helpers. Lines with
-  `entitlementKey` (quantity 1) become entitlements; `discountAmount` /
-  `discountLabel` carry an app-computed discount. Cart subtotals are capped at
-  USD 5,000 (per-currency equivalents); one-time and subscription prices keep
-  the USD 700 cap. Requires the Creator `mode=cart` checkout API.
-- `eazo-sdk payments init --recipe cart-checkout` scaffold (keeps existing
-  shared routes and prints the edit to make) and the
-  `examples/payments/cart-checkout` reference app.
+- **One-time payments with several items.** A one-time checkout can cover
+  several line items, each in any quantity. `createEazoCheckoutRoute` accepts
+  `resolveItems` (body `{ lines, data }`) alongside `getProduct`;
+  `createEazoPaymentStatusRoute` accepts `fulfill` for paid payments with line
+  items; `EazoPaymentSuccessPage` handles them. New: `createEazoPaymentSyncRoute`
+  and `EazoPaymentSync` (`/api/payments/sync`), `createEazoItemsCheckoutSession`,
+  `buildEazoItemsCheckoutRequest`, `listEazoItemsPayments`,
+  `startEazoItemsCheckout`, `assertEazoCheckoutItems`,
+  `getEazoItemsMaximumAmount`, `EAZO_ITEMS_*` constants, and testing helpers.
+  Lines with `entitlementKey` (quantity 1) become entitlements;
+  `discountAmount` / `discountLabel` carry an app-computed discount. Item
+  subtotals are capped at USD 5,000 (per-currency equivalents); single-product
+  and subscription prices keep the USD 700 cap. Requires the Creator one-time
+  `items` checkout API.
+- `eazo-sdk payments init --recipe one-time-items` scaffold (keeps existing
+  shared routes and prints the option to add) and the
+  `examples/payments/one-time-items` reference app.
 - `eazo-sdk payments init` scaffolds into a root `app/` directory (and
   `lib/`, `components/`) when the project has no `src/app`, for every recipe.
 

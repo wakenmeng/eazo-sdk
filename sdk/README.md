@@ -227,35 +227,35 @@ src/lib/eazo-payments/payment-contract.test.ts
 src/lib/eazo-payments/payment-ui-contract.test.tsx
 ```
 
-#### Cart checkout
+#### Several items in one payment
 
-One payment for several line items, or more than one of the same item
-(`cart-checkout` recipe, `@eazo/sdk` >= 0.23.0):
+A one-time payment can also cover several line items, or more than one of the
+same item (`one-time-items` recipe, `@eazo/sdk` >= 0.23.0):
 
 ```bash
-./node_modules/.bin/eazo-sdk payments init --recipe cart-checkout
+./node_modules/.bin/eazo-sdk payments init --recipe one-time-items
 ```
 
 Eazo charges one Stripe Checkout for the lines the app priced (up to 100 lines,
-quantity 1–999, subtotal up to USD 5,000 via `getEazoCartMaximumAmount`),
+quantity 1–999, subtotal up to USD 5,000 via `getEazoItemsMaximumAmount`),
 applies an optional app-computed discount, grants an entitlement for each line
 with `entitlementKey`, and reports whether the payment is paid. The app writes
-two functions in `lib/eazo-payments/cart.ts`:
+two functions in `lib/eazo-payments/items.ts`:
 
-- `resolveCart({ lines, data })` prices the browser's `{ id, quantity }` lines on
-  the server and returns `{ currency, items, discountAmount?, discountLabel? }`,
-  or `null` to reject the cart.
-- `fulfillCartPayment(payment, { user })` grants the lines without
+- `resolveItems({ lines, data })` prices the browser's `{ id, quantity }` lines
+  on the server and returns `{ currency, items, discountAmount?, discountLabel? }`,
+  or `null` to reject the request.
+- `fulfillPayment(payment, { user })` grants the lines without
   `entitlement_key`. It runs only for paid payments and must be idempotent by
   `payment.payment_id`.
 
-It uses the same routes as the other recipes: `createEazoCheckoutRoute({
-resolveCart })` (with `getProduct` too if the app also sells catalog products),
+It uses the same routes as single-product payments: `createEazoCheckoutRoute({
+resolveItems })` (with `getProduct` too if the app also sells catalog products),
 `createEazoPaymentStatusRoute({ fulfill })`, `/payment/success` and
-`/payment/cancel`, plus `createEazoCartSyncRoute({ fulfill })` at
-`/api/payments/sync` with `CartPaymentSync` in the root layout. The browser
-starts checkout with `startEazoCartCheckout(lines, { data })`. See
-`examples/payments/cart-checkout`.
+`/payment/cancel`, plus `createEazoPaymentSyncRoute({ fulfill })` at
+`/api/payments/sync` with `PaymentSync` in the root layout. The browser starts
+checkout with `startEazoItemsCheckout(lines, { data })`. See
+`examples/payments/one-time-items`.
 
 UI code should place the scaffolded component so checkout, login, status
 polling, and entitlement state stay on the SDK-owned lifecycle:

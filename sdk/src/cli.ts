@@ -18,8 +18,12 @@ type TemplateFile = {
 };
 
 const DEFAULT_RECIPE = "one-time-unlock";
-const SUPPORTED_RECIPES = new Set(["one-time-unlock", "monthly-subscription", "cart-checkout"]);
+const SUPPORTED_RECIPES = new Set(["one-time-unlock", "monthly-subscription", "one-time-items"]);
 export const EAZO_PAYMENTS_MIN_SDK_VERSION = "0.22.3";
+// Recipes added after the Payment SDK baseline need a newer declared SDK.
+const RECIPE_MIN_SDK_VERSION: Record<string, string> = {
+  "one-time-items": "0.23.0-items.1",
+};
 export const EAZO_PAYMENTS_REQUIRED_EXPORTS = [
   "./payments",
   "./payments/react",
@@ -982,33 +986,34 @@ describe("Eazo payment UI contract", () => {
 `);
 }
 
-function cartTemplate() {
+function itemsTemplate() {
   return normalizeNewline(`
 import {
   EAZO_PAYMENT_CURRENCY,
-  type EazoCartItem,
-  type EazoCartLine,
+  type EazoCheckoutItem,
+  type EazoCheckoutLine,
 } from "@eazo/sdk/payments";
-import type { EazoCartFulfill, EazoCartResolution } from "@eazo/sdk/payments/next";
+import type { EazoItemsFulfill, EazoItemsResolution } from "@eazo/sdk/payments/next";
 
-export const CART_CURRENCY = EAZO_PAYMENT_CURRENCY.USD;
+export const PAYMENT_CURRENCY = EAZO_PAYMENT_CURRENCY.USD;
 
-// What can be paid for, keyed by the id the browser sends in cart lines. Replace
+// What can be paid for, keyed by the id the browser sends in lines. Replace
 // with the app's own server-side data. unitAmount is integer minor units.
 // entitlementKey: Eazo grants it when paid (quantity 1); read it with
-// useEazoEntitlement(key). Lines without it are granted by fulfillCartPayment.
-export const CART_ITEMS: Record<string, { name: string; unitAmount: number; entitlementKey?: string }> = {
+// useEazoEntitlement(key). Lines without it are granted by fulfillPayment.
+export const PAYMENT_ITEMS: Record<string, { name: string; unitAmount: number; entitlementKey?: string }> = {
   item_a: { name: "Item A", unitAmount: 499, entitlementKey: "item_a" },
   item_b: { name: "Item B", unitAmount: 199 },
 };
 
-// Prices the browser's lines on the server. Return null to reject the cart.
+// Prices the browser's lines on the server. Return null to reject the request.
 // Never trust prices or amounts from the browser; a discount, if any, is
 // computed here and returned as discountAmount / discountLabel.
-export async function resolveCart({ lines }: { lines: EazoCartLine[]; data?: Record<string, string> }): Promise<EazoCartResolution | null> {
-  const items: EazoCartItem[] = [];
+export async function resolveItems({ lines }: { lines: EazoCheckoutLine[]; data?: Record<string, string> }): Promise<EazoItemsResolution | null> {
+  if (new Set(lines.map((line) => line.id)).size !== lines.length) return null;
+  const items: EazoCheckoutItem[] = [];
   for (const line of lines) {
-    const item = CART_ITEMS[line.id];
+    const item = PAYMENT_ITEMS[line.id];
     if (!item) return null;
     if (item.entitlementKey && line.quantity !== 1) return null;
     items.push({
@@ -1019,68 +1024,73 @@ export async function resolveCart({ lines }: { lines: EazoCartLine[]; data?: Rec
       ...(item.entitlementKey ? { entitlementKey: item.entitlementKey } : {}),
     });
   }
-  return { currency: CART_CURRENCY, items };
+  return { currency: PAYMENT_CURRENCY, items };
 }
 
 // Grants the paid lines that have no entitlement_key to user.id. Called only for
-// paid cart payments, possibly more than once per payment. In ONE transaction:
+// paid payments with line items, possibly more than once per payment. Record the payment
+// in a table whose primary key is payment_id, in the same transaction:
 //
-//   INSERT INTO cart_fulfillments (payment_id, user_id) VALUES ($1, $2)
-//     ON CONFLICT (payment_id) DO NOTHING RETURNING payment_id;
-//   -- no row returned: already granted, stop.
-//   -- row returned: grant each remaining line to user.id.
-export const fulfillCartPayment: EazoCartFulfill = async (payment, { user }) => {
+//   await db.transaction(async (tx) => {
+//     const inserted = await tx.insert(paymentFulfillments)
+//       .values({ paymentId: payment.payment_id, userId: user.id })
+//       .onConflictDoNothing({ target: paymentFulfillments.paymentId })
+//       .returning();
+//     if (inserted.length === 0) return; // already granted
+//     // grant each remaining line to user.id
+//   });
+export const fulfillPayment: EazoItemsFulfill = async (payment, { user }) => {
   const lines = payment.line_items.filter((line) => !line.entitlement_key);
   if (lines.length === 0) return; // Entitlement lines are granted by Eazo.
   void user;
-  throw new Error("Implement fulfillCartPayment in lib/eazo-payments/cart.ts");
+  throw new Error("Implement fulfillPayment in lib/eazo-payments/items.ts");
 };
 `);
 }
 
-function cartCheckoutRouteTemplate() {
+function itemsCheckoutRouteTemplate() {
   return normalizeNewline(`
 import { createEazoCheckoutRoute } from "@eazo/sdk/payments/next";
-import { resolveCart } from "@/lib/eazo-payments/cart";
+import { resolveItems } from "@/lib/eazo-payments/items";
 
-export const POST = createEazoCheckoutRoute({ resolveCart });
+export const POST = createEazoCheckoutRoute({ resolveItems });
 `);
 }
 
-function cartStatusRouteTemplate() {
+function itemsStatusRouteTemplate() {
   return normalizeNewline(`
 import { createEazoPaymentStatusRoute } from "@eazo/sdk/payments/next";
-import { fulfillCartPayment } from "@/lib/eazo-payments/cart";
+import { fulfillPayment } from "@/lib/eazo-payments/items";
 
-export const GET = createEazoPaymentStatusRoute({ fulfill: fulfillCartPayment });
+export const GET = createEazoPaymentStatusRoute({ fulfill: fulfillPayment });
 `);
 }
 
-function cartSyncRouteTemplate() {
+function paymentSyncRouteTemplate() {
   return normalizeNewline(`
-import { createEazoCartSyncRoute } from "@eazo/sdk/payments/next";
-import { fulfillCartPayment } from "@/lib/eazo-payments/cart";
+import { createEazoPaymentSyncRoute } from "@eazo/sdk/payments/next";
+import { fulfillPayment } from "@/lib/eazo-payments/items";
 
-export const POST = createEazoCartSyncRoute({ fulfill: fulfillCartPayment });
+export const POST = createEazoPaymentSyncRoute({ fulfill: fulfillPayment });
 `);
 }
 
-function cartCheckoutButtonTemplate() {
+function itemsCheckoutButtonTemplate() {
   return normalizeNewline(`
 "use client";
 
 import * as React from "react";
-import { startEazoCartCheckout, type EazoCartLine } from "@eazo/sdk/payments";
+import { startEazoItemsCheckout, type EazoCheckoutLine } from "@eazo/sdk/payments";
 
-export type CartCheckoutButtonProps = {
-  lines: EazoCartLine[];
+export type ItemsCheckoutButtonProps = {
+  lines: EazoCheckoutLine[];
   children?: React.ReactNode;
   className?: string;
 };
 
 // Lines can live in React state or localStorage; payment state never does.
 // The button only starts checkout; granting happens on the server.
-export function CartCheckoutButton({ lines, children = "Checkout", className }: CartCheckoutButtonProps) {
+export function ItemsCheckoutButton({ lines, children = "Checkout", className }: ItemsCheckoutButtonProps) {
   const [starting, setStarting] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -1088,7 +1098,7 @@ export function CartCheckoutButton({ lines, children = "Checkout", className }: 
     setStarting(true);
     setError("");
     try {
-      await startEazoCartCheckout(lines);
+      await startEazoItemsCheckout(lines);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");
       setStarting(false);
@@ -1107,34 +1117,34 @@ export function CartCheckoutButton({ lines, children = "Checkout", className }: 
 `);
 }
 
-function cartPaymentSyncTemplate() {
+function paymentSyncTemplate() {
   return normalizeNewline(`
 "use client";
 
-import { EazoCartPaymentSync } from "@eazo/sdk/payments/next/client";
+import { EazoPaymentSync } from "@eazo/sdk/payments/next/client";
 
-// Mount once in the root layout so paid carts are granted even when the buyer
+// Mount once in the root layout so paid payments are granted even when the buyer
 // closed the page before returning from checkout.
-export function CartPaymentSync() {
-  return <EazoCartPaymentSync />;
+export function PaymentSync() {
+  return <EazoPaymentSync />;
 }
 `);
 }
 
-function cartContractTestTemplate() {
+function itemsContractTestTemplate() {
   return normalizeNewline(`
 import * as fs from "fs";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildEazoCartCheckoutRequest } from "@eazo/sdk/payments/server";
+import { buildEazoItemsCheckoutRequest } from "@eazo/sdk/payments/server";
 import { createEazoPaymentStatusRoute } from "@eazo/sdk/payments/next";
 import {
-  assertEazoCartCheckoutRequestContract,
+  assertEazoItemsCheckoutRequestContract,
   assertNoLegacyPaymentFlowSource,
-  mockEazoCartPayment,
-  mockEazoCartPaymentFromResolution,
+  mockEazoItemsPayment,
+  mockEazoItemsPaymentFromResolution,
 } from "@eazo/sdk/payments/testing";
-import { fulfillCartPayment, resolveCart, CART_ITEMS } from "./cart";
+import { fulfillPayment, resolveItems, PAYMENT_ITEMS } from "./items";
 
 const TEST_USER = { id: "app_user_test", email: null, name: null, avatarUrl: null };
 const originalEnv = { ...process.env };
@@ -1159,7 +1169,7 @@ function listSourceFiles(dir: string): string[] {
   });
 }
 
-describe("Eazo cart checkout contract", () => {
+describe("Eazo items checkout contract", () => {
   beforeEach(() => {
     process.env.EAZO_API_BASE = "https://dev1.eazo.ai";
     process.env.EAZO_APP_ID = "app_test";
@@ -1172,52 +1182,52 @@ describe("Eazo cart checkout contract", () => {
   });
 
   function allItemLines() {
-    return Object.entries(CART_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
+    return Object.entries(PAYMENT_ITEMS).map(([id, item]) => ({ id, quantity: item.entitlementKey ? 1 : 2 }));
   }
 
-  it("prices every cart item on the server into a valid platform request", async () => {
-    const cart = await resolveCart({ lines: allItemLines(), data: {} });
-    expect(cart).not.toBeNull();
+  it("prices every item on the server into a valid platform request", async () => {
+    const resolved = await resolveItems({ lines: allItemLines(), data: {} });
+    expect(resolved).not.toBeNull();
 
-    const request = buildEazoCartCheckoutRequest({
+    const request = buildEazoItemsCheckoutRequest({
       appUserId: TEST_USER.id,
-      currency: cart!.currency,
-      items: cart!.items,
-      discountAmount: cart!.discountAmount,
-      discountLabel: cart!.discountLabel,
-      metadata: cart!.metadata,
+      currency: resolved!.currency,
+      items: resolved!.items,
+      discountAmount: resolved!.discountAmount,
+      discountLabel: resolved!.discountLabel,
+      metadata: resolved!.metadata,
       successUrl: "https://app.example.com/payment/success",
       cancelUrl: "https://app.example.com/payment/cancel",
     });
-    assertEazoCartCheckoutRequestContract(request);
+    assertEazoItemsCheckoutRequestContract(request);
   });
 
-  it("rejects carts with unknown items", async () => {
-    await expect(resolveCart({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
+  it("rejects unknown items", async () => {
+    await expect(resolveItems({ lines: [{ id: "unknown_item", quantity: 1 }], data: {} })).resolves.toBeNull();
   });
 
-  it("fulfills a paid cart of every item and tolerates repeated delivery", async () => {
-    const cart = await resolveCart({ lines: allItemLines(), data: {} });
-    const payment = mockEazoCartPaymentFromResolution(cart!);
-    await fulfillCartPayment(payment, { user: TEST_USER });
-    await fulfillCartPayment(payment, { user: TEST_USER });
+  it("fulfills a paid payment of every item and tolerates repeated delivery", async () => {
+    const resolved = await resolveItems({ lines: allItemLines(), data: {} });
+    const payment = mockEazoItemsPaymentFromResolution(resolved!);
+    await fulfillPayment(payment, { user: TEST_USER });
+    await fulfillPayment(payment, { user: TEST_USER });
     // Add assertions on the app's own storage: each line was granted once.
   });
 
-  it("only fulfills cart payments that are paid", async () => {
+  it("only fulfills payments that are paid", async () => {
     const fulfill = vi.fn();
     const GET = createEazoPaymentStatusRoute({
       fulfill,
       getUser: () => ({ ok: true, user: TEST_USER }),
     });
 
-    mockPlatformResponse(200, mockEazoCartPayment("pending"));
-    const pending = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
+    mockPlatformResponse(200, mockEazoItemsPayment("pending"));
+    const pending = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_items"));
     expect((await pending.json()).fulfilled).toBe(false);
     expect(fulfill).not.toHaveBeenCalled();
 
-    mockPlatformResponse(200, mockEazoCartPayment("succeeded"));
-    const paid = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_cart"));
+    mockPlatformResponse(200, mockEazoItemsPayment("succeeded"));
+    const paid = await GET(new Request("https://app.example.com/api/payments/status?paymentId=cap_test_items"));
     expect((await paid.json()).fulfilled).toBe(true);
     expect(fulfill).toHaveBeenCalledTimes(1);
   });
@@ -1233,30 +1243,35 @@ describe("Eazo cart checkout contract", () => {
 `);
 }
 
-function cartTemplateFiles(): TemplateFile[] {
+function itemsTemplateFiles(): TemplateFile[] {
   return [
-    { filePath: "src/lib/eazo-payments/cart.ts", content: cartTemplate() },
-    { filePath: "src/lib/eazo-payments/cart-contract.test.ts", content: cartContractTestTemplate() },
-    { filePath: "src/components/eazo-payments/CartCheckoutButton.tsx", content: cartCheckoutButtonTemplate() },
-    { filePath: "src/components/eazo-payments/CartPaymentSync.tsx", content: cartPaymentSyncTemplate() },
+    { filePath: "src/lib/eazo-payments/items.ts", content: itemsTemplate() },
+    { filePath: "src/lib/eazo-payments/items-contract.test.ts", content: itemsContractTestTemplate() },
+    { filePath: "src/components/eazo-payments/ItemsCheckoutButton.tsx", content: itemsCheckoutButtonTemplate() },
+    { filePath: "src/components/eazo-payments/PaymentSync.tsx", content: paymentSyncTemplate() },
     {
       filePath: "src/app/api/payments/checkout/route.ts",
-      content: cartCheckoutRouteTemplate(),
-      existingHint: "add `resolveCart` (from @/lib/eazo-payments/cart) to its createEazoCheckoutRoute options",
+      content: itemsCheckoutRouteTemplate(),
+      existingHint: "add `resolveItems` (from @/lib/eazo-payments/items) to its createEazoCheckoutRoute options",
     },
     {
       filePath: "src/app/api/payments/status/route.ts",
-      content: cartStatusRouteTemplate(),
-      existingHint: "add `fulfill: fulfillCartPayment` (from @/lib/eazo-payments/cart) to its createEazoPaymentStatusRoute options",
+      content: itemsStatusRouteTemplate(),
+      existingHint: "add `fulfill: fulfillPayment` (from @/lib/eazo-payments/items) to its createEazoPaymentStatusRoute options",
     },
-    { filePath: "src/app/api/payments/sync/route.ts", content: cartSyncRouteTemplate() },
+    { filePath: "src/app/api/payments/sync/route.ts", content: paymentSyncRouteTemplate() },
+    {
+      filePath: "src/app/api/payments/entitlements/route.ts",
+      content: entitlementRouteTemplate(),
+      existingHint: "keep it",
+    },
     { filePath: "src/app/payment/success/page.tsx", content: successPageTemplate(), existingHint: "keep it" },
     { filePath: "src/app/payment/cancel/page.tsx", content: cancelPageTemplate(), existingHint: "keep it" },
   ];
 }
 
 function templateFiles(recipe: string): TemplateFile[] {
-  if (recipe === "cart-checkout") return cartTemplateFiles();
+  if (recipe === "one-time-items") return itemsTemplateFiles();
   const files: TemplateFile[] = [
     {
       filePath: "src/lib/eazo-payments/catalog.ts",
@@ -1340,6 +1355,7 @@ export function detectPaymentsSourceRoot(cwd: string): "src" | "" {
 function placeTemplateFiles(files: TemplateFile[], sourceRoot: "src" | ""): TemplateFile[] {
   if (sourceRoot === "src") return files;
   return files.map((file) => ({
+    ...file,
     filePath: file.filePath.replace(/^src\//, ""),
     content: file.content.replace(SRC_SCAN_SNIPPET, ROOT_SCAN_SNIPPET),
   }));
@@ -1355,7 +1371,8 @@ export function scaffoldPayments(options: ScaffoldOptions = {}) {
 
   const allFiles = placeTemplateFiles(templateFiles(recipe), detectPaymentsSourceRoot(cwd));
   const exists = (file: TemplateFile) => fs.existsSync(path.join(cwd, file.filePath));
-  const kept = options.force ? [] : allFiles.filter((file) => file.existingHint && exists(file));
+  // Shared routes may already hold another recipe's options, so even --force keeps them.
+  const kept = allFiles.filter((file) => file.existingHint && exists(file));
   const files = allFiles.filter((file) => !kept.includes(file));
   const existing = files
     .map((file) => path.join(cwd, file.filePath))
@@ -1388,7 +1405,7 @@ function printUsage() {
   eazo-sdk payments doctor [--minimum-version <version>] [--cwd <path>]
   eazo-sdk payments init --recipe one-time-unlock [--minimum-version <version>] [--force] [--cwd <path>]
   eazo-sdk payments init --recipe monthly-subscription [--minimum-version <version>] [--force] [--cwd <path>]
-  eazo-sdk payments init --recipe cart-checkout [--minimum-version <version>] [--force] [--cwd <path>]
+  eazo-sdk payments init --recipe one-time-items [--minimum-version <version>] [--force] [--cwd <path>]
 
 Commands:
   payments doctor Validate the declared, installed, and exported Payment SDK contract.
@@ -1410,17 +1427,20 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   const cwd = readOption(argv, "--cwd") || process.cwd();
+  const recipe = readOption(argv, "--recipe") || DEFAULT_RECIPE;
+  const requestedMinimum = readOption(argv, "--minimum-version") || EAZO_PAYMENTS_MIN_SDK_VERSION;
+  const recipeMinimum = command === "init" ? RECIPE_MIN_SDK_VERSION[recipe] : undefined;
   const doctor = inspectPaymentsInstallation({
     cwd,
     minimumVersion:
-      readOption(argv, "--minimum-version") || EAZO_PAYMENTS_MIN_SDK_VERSION,
+      recipeMinimum && !isVersionAtLeast(requestedMinimum, recipeMinimum) ? recipeMinimum : requestedMinimum,
   });
   console.log(formatPaymentsDoctorReport(doctor));
   if (!doctor.ok) return 1;
   if (command === "doctor") return 0;
 
   const result = scaffoldPayments({
-    recipe: readOption(argv, "--recipe") || DEFAULT_RECIPE,
+    recipe,
     cwd,
     force: argv.includes("--force"),
     dryRun: argv.includes("--dry-run"),
@@ -1435,6 +1455,11 @@ export function main(argv = process.argv.slice(2)) {
     for (const file of result.kept) {
       console.log(`- ${file.filePath}: ${file.hint}`);
     }
+  }
+  if (result.recipe === "one-time-items") {
+    console.log("Next: implement resolveItems and fulfillPayment in lib/eazo-payments/items.ts");
+    console.log("(items-contract.test.ts fails until fulfillPayment is implemented),");
+    console.log("and mount <PaymentSync /> once in the root layout.");
   }
   return 0;
 }

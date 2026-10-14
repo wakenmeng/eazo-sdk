@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import {
-  EAZO_CART_PAYMENT_MODE,
   clearRememberedEazoPaymentId,
   getEazoPaymentErrorMessage,
   readEazoPaymentIdFromUrl,
@@ -60,7 +59,7 @@ export function EazoPaymentSuccessPage({
 
       const nextStatus = data as StatusResponse;
       if (nextStatus.paid && nextStatus.fulfilled === false) {
-        // Cart paid but the app could not deliver yet; EazoCartPaymentSync retries later.
+        // Paid but the app could not grant every line yet; EazoPaymentSync retries later.
         setStatus(nextStatus);
         clearRememberedEazoPaymentId();
         return;
@@ -71,8 +70,8 @@ export function EazoPaymentSuccessPage({
       }
 
       setStatus(nextStatus);
-      if (nextStatus.paid && nextStatus.mode === EAZO_CART_PAYMENT_MODE) {
-        // Unlock lines are granted by Eazo; refresh them so entitlement gates update.
+      if (nextStatus.paid && Array.isArray(nextStatus.line_items)) {
+        // Eazo grants entitlement lines; refresh them so entitlement gates update.
         const unlockKeys = (nextStatus.line_items || [])
           .map((line) => line.entitlement_key)
           .filter((key): key is string => Boolean(key));
@@ -122,7 +121,7 @@ export function EazoPaymentSuccessPage({
     );
   }
 
-  if (status?.paid && (status.mode === EAZO_CART_PAYMENT_MODE || status.fulfilled !== undefined)) {
+  if (status?.paid && (Array.isArray(status.line_items) || status.fulfilled !== undefined)) {
     const delivered = status.fulfilled !== false;
     return (
       <PaymentStateShell
@@ -212,11 +211,11 @@ export function EazoPaymentCancelPage({
 }
 
 /**
- * Asks the app's cart sync route to deliver any paid cart that was not granted
+ * Asks the app's sync route to grant any paid payment that was not granted
  * yet, e.g. when the buyer closed the page before returning from checkout.
  * Mount once in the app layout; it does nothing for signed-out users.
  */
-export function EazoCartPaymentSync({ endpoint = "/api/payments/sync" }: { endpoint?: string }) {
+export function EazoPaymentSync({ endpoint = "/api/payments/sync" }: { endpoint?: string }) {
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
