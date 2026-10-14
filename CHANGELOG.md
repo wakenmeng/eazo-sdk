@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charges the discounted total. `startEazoCartCheckout(lines, { data })` passes
   string values such as a coupon code to `resolveCart`.
 - `mockEazoCartPaymentFromResolution` testing helper.
+- `eazo-sdk payments init` scaffolds into a root `app/` directory (and
+  `lib/`, `components/`) when the project has no `src/app`, for every recipe.
 - `eazo-sdk payments init --recipe cart-checkout` scaffold and the
   `examples/payments/cart-checkout` reference app.
 

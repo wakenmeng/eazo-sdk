@@ -1336,6 +1336,31 @@ function templateFiles(recipe: string): TemplateFile[] {
   return files;
 }
 
+const SRC_SCAN_SNIPPET = `const srcDir = path.resolve(process.cwd(), "src");
+    for (const filePath of listSourceFiles(srcDir)) {`;
+const ROOT_SCAN_SNIPPET = `const sourceFiles = ["app", "lib", "components"].flatMap((dir) =>
+      listSourceFiles(path.resolve(process.cwd(), dir)),
+    );
+    for (const filePath of sourceFiles) {`;
+
+/**
+ * Next-style apps keep routes in either `src/app` or a root `app/`; the
+ * framework ignores the other one, so scaffolded files must follow the app.
+ */
+export function detectPaymentsSourceRoot(cwd: string): "src" | "" {
+  if (fs.existsSync(path.join(cwd, "src", "app"))) return "src";
+  if (fs.existsSync(path.join(cwd, "app"))) return "";
+  return "src";
+}
+
+function placeTemplateFiles(files: TemplateFile[], sourceRoot: "src" | ""): TemplateFile[] {
+  if (sourceRoot === "src") return files;
+  return files.map((file) => ({
+    filePath: file.filePath.replace(/^src\//, ""),
+    content: file.content.replace(SRC_SCAN_SNIPPET, ROOT_SCAN_SNIPPET),
+  }));
+}
+
 export function scaffoldPayments(options: ScaffoldOptions = {}) {
   const cwd = path.resolve(options.cwd || process.cwd());
   const recipe = options.recipe || DEFAULT_RECIPE;
@@ -1344,7 +1369,7 @@ export function scaffoldPayments(options: ScaffoldOptions = {}) {
     throw new Error(`Unsupported payments recipe: ${recipe}`);
   }
 
-  const files = templateFiles(recipe);
+  const files = placeTemplateFiles(templateFiles(recipe), detectPaymentsSourceRoot(cwd));
   const existing = files
     .map((file) => path.join(cwd, file.filePath))
     .filter((filePath) => fs.existsSync(filePath));

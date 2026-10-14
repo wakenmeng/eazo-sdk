@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { scaffoldPayments } from "../cli";
+import { detectPaymentsSourceRoot, scaffoldPayments } from "../cli";
 import {
   assertEazoCartItems,
   EAZO_CART_MAXIMUM_AMOUNT_BY_CURRENCY,
@@ -423,6 +423,33 @@ describe("Eazo cart checkout SDK", () => {
     });
     expect(payment).toMatchObject({ paid: true, amount_subtotal: 1300, discount_amount: 300, amount_total: 1000 });
     expect(payment.line_items.map((line) => line.entitlement_key)).toEqual(["skin_red", null]);
+  });
+
+  it("scaffolds into a root app/ directory when the project has no src/app", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-root-app-"));
+    fs.mkdirSync(path.join(cwd, "app"));
+    expect(detectPaymentsSourceRoot(cwd)).toBe("");
+
+    const cart = scaffoldPayments({ cwd, recipe: "cart-checkout" });
+    expect(cart.files).toContain("app/api/payments/cart-checkout/route.ts");
+    expect(cart.files).toContain("lib/eazo-payments/cart.ts");
+    expect(cart.files.some((file) => file.startsWith("src/"))).toBe(false);
+    expect(fs.existsSync(path.join(cwd, "src"))).toBe(false);
+    const contractTest = fs.readFileSync(path.join(cwd, "lib/eazo-payments/cart-contract.test.ts"), "utf8");
+    expect(contractTest).toContain('["app", "lib", "components"]');
+    expect(contractTest).not.toContain('path.resolve(process.cwd(), "src")');
+
+    const oneTime = scaffoldPayments({ cwd, recipe: "one-time-unlock" });
+    expect(oneTime.files).toContain("app/api/payments/checkout/route.ts");
+  });
+
+  it("keeps src/ when the project uses src/app or has no app directory yet", () => {
+    const withSrc = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-src-app-"));
+    fs.mkdirSync(path.join(withSrc, "src", "app"), { recursive: true });
+    fs.mkdirSync(path.join(withSrc, "app"));
+    expect(detectPaymentsSourceRoot(withSrc)).toBe("src");
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "eazo-payments-empty-"));
+    expect(detectPaymentsSourceRoot(empty)).toBe("src");
   });
 
   it("scaffolds the cart-checkout recipe with thin routes and an explicit fulfill stub", () => {
