@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Cart checkout for generated apps.** One checkout can now buy several items,
-  each in any quantity (virtual goods). New APIs: `createEazoCartCheckoutSession`,
+  each in any quantity; what is sold and how it is delivered stays in the app. New APIs: `createEazoCartCheckoutSession`,
   `buildEazoCartCheckoutRequest`, `listEazoCartPayments`
   (`@eazo/sdk/payments/server`); `createEazoCartCheckoutRoute`,
   `createEazoCartPaymentStatusRoute`, `createEazoCartSyncRoute`

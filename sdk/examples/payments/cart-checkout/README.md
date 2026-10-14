@@ -74,4 +74,3 @@ demonstration only.
 - Never call `/api/open/payments/*` or Stripe from the app.
 - Never grant goods from the browser, from a Stripe redirect, or from
   localStorage. Only `fulfillCartPayment` grants, and only for paid payments.
-- Refunds are not supported by the cart flow yet.
